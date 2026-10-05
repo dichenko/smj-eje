@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Smart-J backup
+
+[Timer]
+OnCalendar=*-*-* 04:00:00 Europe/Moscow
+RandomizedDelaySec=5min
+Persistent=true
+Unit=smj-backup.service
+
+[Install]
+WantedBy=timers.target

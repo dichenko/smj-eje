@@ -1,0 +1,1 @@
+"""Smart-J private reports."""

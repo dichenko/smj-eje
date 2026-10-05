@@ -1,0 +1,10 @@
+<div class="table-scroll">
+<table>
+  <thead><tr><th>Дата</th><th>Модуль</th><th>Тема</th><th>Город</th><th>Преподаватель</th><th>Группа</th></tr></thead>
+  <tbody>{% for lesson in lessons %}<tr>
+    <td class="nowrap">{{ lesson.date[8:10] }}.{{ lesson.date[5:7] }}.{{ lesson.date[:4] }}</td>
+    <td><span class="badge {{ lesson.module.lower() }}">{{ lesson.module }}</span></td>
+    <td>{{ lesson.topic }}</td><td>{{ lesson.city }}</td><td>{{ lesson.teacher }}</td><td>{{ lesson.group_name or '—' }}</td>
+  </tr>{% else %}<tr><td colspan="6" class="empty">Занятий по выбранным условиям нет.</td></tr>{% endfor %}</tbody>
+</table>
+</div>

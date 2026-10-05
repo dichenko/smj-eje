@@ -1,0 +1,24 @@
+[Unit]
+Description=Smart-J lesson synchronization
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=smj
+Group=smj
+WorkingDirectory=/opt/smj-eje
+EnvironmentFile=/etc/smj-eje/.env
+Environment=ENV_FILE=/etc/smj-eje/.env
+ExecStart=/opt/smj-eje/.venv/bin/smj sync
+TimeoutStartSec=10min
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/smj-eje
+Nice=10
+CPUQuota=50%
+MemoryMax=384M

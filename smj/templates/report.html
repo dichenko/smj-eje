@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">ЗАНЯТИЯ</p><h1>{{ title }}</h1></div><div class="total"><strong>{{ total }}</strong><span>найдено занятий</span></div></div>
+<section class="card">
+<form class="filters" method="get">
+  <label>Модуль<select name="module" {% if locked_module %}disabled{% endif %}><option value="">Все модули</option>{% for module in modules %}<option value="{{ module }}" {% if selected.module == module %}selected{% endif %}>{{ module }}</option>{% endfor %}</select></label>
+  <label>Город<select name="city"><option value="">Все города</option>{% for city in cities %}<option value="{{ city }}" {% if selected.city == city %}selected{% endif %}>{{ city }}</option>{% endfor %}</select></label>
+  <label>Преподаватель<select name="teacher"><option value="">Все преподаватели</option>{% for teacher in teachers %}<option value="{{ teacher }}" {% if selected.teacher == teacher %}selected{% endif %}>{{ teacher }}</option>{% endfor %}</select></label>
+  <label>Группа<select name="group_name"><option value="">Все группы</option>{% for group in groups %}<option value="{{ group }}" {% if selected.group_name == group %}selected{% endif %}>{{ group }}</option>{% endfor %}</select></label>
+  <label>С даты<input type="date" name="start" value="{{ selected.start }}" min="{{ data_start }}"></label>
+  <label>По дату<input type="date" name="end" value="{{ selected.end }}" min="{{ data_start }}"></label>
+  <label>На странице<select name="per_page">{% for size in [10,25,50,100] %}<option {% if per_page == size %}selected{% endif %}>{{ size }}</option>{% endfor %}</select></label>
+  <div class="filter-actions"><button type="submit">Показать</button><a class="quiet" href="{{ url_for(request.endpoint) }}">Сбросить</a></div>
+</form>
+</section>
+<section class="card">{% include 'table.html' %}</section>
+<div class="pagination">
+  {% if page > 1 %}<a class="button secondary" href="{{ links.prev }}">← Назад</a>{% endif %}
+  <span>Страница {{ page }} из {{ pages }}</span>
+  {% if page < pages %}<a class="button secondary" href="{{ links.next }}">Далее →</a>{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,13 @@
+[Unit]
+Description=Synchronize Smart-J at new random intervals of 30-60 minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=30min
+RandomizedDelaySec=30min
+FixedRandomDelay=no
+AccuracySec=1us
+Unit=smj-sync.service
+
+[Install]
+WantedBy=timers.target

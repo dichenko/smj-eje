@@ -1,0 +1,8 @@
+# Add ONLY this separate block to your existing Caddyfile.
+# Replace reports.example.com with your subdomain. Do not replace the bot's configuration.
+reports.example.com {
+    @health path /healthz
+    respond @health 404
+    reverse_proxy 127.0.0.1:8081
+    encode zstd gzip
+}

@@ -1,0 +1,2 @@
+{% extends 'base.html' %}
+{% block content %}<section class="card empty"><p class="eyebrow">ОШИБКА {{ code }}</p><h1>Не удалось открыть страницу</h1><p>Проверьте адрес и параметры запроса.</p><a class="button" href="{{ url_for('index') }}">К отчетам</a></section>{% endblock %}

@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="login-card">
+  <p class="eyebrow">SMART-J · ЛИЧНЫЙ ДОСТУП</p>
+  <h1>Отчеты о занятиях</h1>
+  <p class="muted">Введите пароль, чтобы открыть отчеты.</p>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label for="password">Пароль</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required autofocus maxlength="1024">
+    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+    <button type="submit">Войти</button>
+  </form>
+</section>
+{% endblock %}

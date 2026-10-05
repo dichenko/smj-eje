@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">НЕДЕЛЬНЫЙ ОТЧЕТ</p><h1>{{ start.strftime('%d.%m') }} — {{ end.strftime('%d.%m.%Y') }}</h1></div><div class="total"><strong>{{ total }}</strong><span>{{ total|lesson_word }} за неделю</span></div></div>
+<div class="weekly-layout">
+<aside>
+  <section class="card"><h2>Выбрать неделю</h2>
+    <form method="get" action="{{ url_for('weekly') }}"><label>Любой день недели<input type="date" name="week" value="{{ start }}" min="{{ data_start }}" max="{{ today }}"></label><button type="submit">Открыть</button></form>
+    <div class="week-links">{% for week in weeks %}<a {% if week == start %}class="selected"{% endif %} href="{{ url_for('weekly', start_date=week.isoformat()) }}">{{ week.strftime('%d.%m.%Y') }}</a>{% endfor %}</div>
+  </section>
+  {% for month in calendars %}<section class="card calendar"><h2>{{ month.label }}</h2><table><thead><tr>{% for day in ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'] %}<th>{{ day }}</th>{% endfor %}</tr></thead><tbody>{% for week in month.weeks %}<tr>{% for day in week %}<td class="{% if start <= day <= end %}selected{% endif %} {% if day == today %}today{% endif %}">{% if day.month == month.month %}{% if first_week <= day <= last_week_end %}<a href="{{ url_for('weekly', start_date=day.isoformat()) }}">{{ day.day }}</a>{% else %}{{ day.day }}{% endif %}{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody></table></section>{% endfor %}
+</aside>
+<div>
+  <div class="pagination">{% if previous %}<a class="button secondary" href="{{ url_for('weekly', start_date=previous.isoformat()) }}">← Предыдущая</a>{% endif %}{% if following %}<a class="button secondary" href="{{ url_for('weekly', start_date=following.isoformat()) }}">Следующая →</a>{% endif %}</div>
+  {% for city, city_modules in grouped.items() %}<section class="card city-card"><h2>{{ city }}</h2>
+    {% for module, lessons in city_modules.items() %}<div class="module-heading"><span class="badge {{ module.lower() }}">{{ module }}</span><span>{{ lessons|length }} {{ lessons|length|lesson_word }}</span></div>{% include 'table.html' %}{% endfor %}
+  </section>{% else %}<section class="card empty"><h2>За эту неделю занятий нет</h2><p>Выберите другую неделю или проверьте время последнего обновления.</p></section>{% endfor %}
+</div>
+</div>
+{% endblock %}
