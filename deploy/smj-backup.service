@@ -6,7 +6,6 @@ Type=oneshot
 User=smj
 Group=smj
 WorkingDirectory=/opt/smj-eje
-EnvironmentFile=/etc/smj-eje/.env
 Environment=ENV_FILE=/etc/smj-eje/.env
 ExecStart=/opt/smj-eje/.venv/bin/smj backup
 TimeoutStartSec=5min

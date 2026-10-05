@@ -77,6 +77,8 @@ sudoedit /etc/smj-eje/.env
 
 В `/etc/smj-eje/.env` заполните новые `APP_PASSWORD`, `FLASK_SECRET_KEY`, `SMARTJ_USERNAME`, `SMARTJ_PASSWORD`. Для production оставьте пути из примера и `APP_ENV=production`. Сервис принудительно использует production-режим. Перед публикацией проверьте права файла `600` и владельца `smj`.
 
+Службы передают приложению только путь `ENV_FILE`; все секреты читает dotenv внутри процесса. Не добавляйте `.env` как директиву systemd `EnvironmentFile`: это передает пароли и ключи в общие системные переменные окружения.
+
 ### 2. Первая загрузка и веб-служба
 
 ```bash

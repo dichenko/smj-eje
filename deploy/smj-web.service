@@ -7,7 +7,6 @@ Type=simple
 User=smj
 Group=smj
 WorkingDirectory=/opt/smj-eje
-EnvironmentFile=/etc/smj-eje/.env
 Environment=APP_ENV=production
 Environment=ENV_FILE=/etc/smj-eje/.env
 ExecStart=/opt/smj-eje/.venv/bin/gunicorn --bind 127.0.0.1:8081 --workers 1 --threads 2 --timeout 60 --access-logfile - --error-logfile - wsgi:app
