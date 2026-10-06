@@ -2,6 +2,7 @@ from dataclasses import replace
 import re
 
 import pytest
+from bs4 import BeautifulSoup
 
 from smj.web import create_app
 from test_sync import run
@@ -135,3 +136,22 @@ def test_week_outside_period_rejected(app, settings, week):
     client = app.test_client()
     login(client, settings.password)
     assert client.get("/weekly/" + week, base_url="https://localhost").status_code == 400
+
+
+def test_lesson_table_uses_consistent_alternating_week_colors(settings, lesson):
+    lessons = [replace(lesson, stable_id="week-oct-5", date="2026-10-05", topic="Понедельник"),
+               replace(lesson, stable_id="week-oct-4", date="2026-10-04", topic="Воскресенье"),
+               replace(lesson, stable_id="week-sep-28", date="2026-09-28", topic="Предыдущая неделя")]
+    run(settings, lessons)
+    app = create_app(settings)
+    client = app.test_client()
+    login(client, settings.password)
+    response = client.get("/cities?teacher=Учитель 1", base_url="https://localhost")
+    rows = BeautifulSoup(response.data, "html.parser").select(".table-scroll tbody tr")
+    bands = [row.get("class", [])[0] for row in rows]
+    assert len(bands) == 3
+    # The report sorts newest first: Oct 5 is a new week; Oct 4 and Sep 28 share one.
+    assert bands[0] != bands[1]
+    assert bands[1] == bands[2]
+    week_band = app.jinja_env.filters["week_band"]
+    assert week_band("2026-12-28") != week_band("2027-01-04")

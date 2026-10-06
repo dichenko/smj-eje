@@ -44,6 +44,13 @@ def create_app(settings=None):
             return "занятий"
         return "занятие" if number % 10 == 1 else "занятия" if number % 10 in {2, 3, 4} else "занятий"
 
+    @app.template_filter("week_band")
+    def week_band(value):
+        lesson_day = date.fromisoformat(value)
+        week_start = lesson_day - timedelta(days=lesson_day.weekday())
+        anchor = date(1970, 1, 5)  # Monday; keeps adjacent weeks opposite across year boundaries.
+        return "a" if ((week_start - anchor).days // 7) % 2 == 0 else "b"
+
     def authenticated():
         value = session.get("auth_version", "")
         return isinstance(value, str) and hmac.compare_digest(value, auth_version)
