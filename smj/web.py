@@ -3,6 +3,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 import hashlib
 import hmac
+import re
 import secrets
 import time
 from urllib.parse import urlsplit
@@ -14,6 +15,13 @@ from werkzeug.utils import secure_filename
 from .config import MODULES, Settings
 from .db import connection, distinct_values, initialize, query_lessons, sync_status, utc_now
 from .excel import video_report
+
+
+def normalize_telegram_username(value):
+    username = str(value or "").strip().removeprefix("@")
+    if username and not re.fullmatch(r"[A-Za-z0-9_]{5,32}", username):
+        raise ValueError("Укажите Telegram username: от 5 до 32 латинских букв, цифр или _.")
+    return username
 
 
 def create_app(settings=None):
@@ -207,10 +215,13 @@ def create_app(settings=None):
             abort(400, "Unknown course")
         with connection(settings.db_path) as db:
             teacher_map = {}
+            telegram_names = {(row["city"], row["teacher"]): row["telegram_username"]
+                              for row in db.execute("SELECT city,teacher,telegram_username FROM tutor_contacts")}
             for row in db.execute("SELECT DISTINCT city,teacher,module FROM lessons"):
                 key = (row["city"], row["teacher"])
                 teacher_map.setdefault(key, {"city": row["city"], "teacher": row["teacher"],
-                                              "modules": set(), "video_count": 0})
+                                              "modules": set(), "video_count": 0,
+                                              "telegram_username": telegram_names.get(key, "")})
                 teacher_map[key]["modules"].add(row["module"])
             for row in db.execute("""
                 SELECT city,teacher,module,COUNT(*) AS video_count FROM videos
@@ -218,7 +229,8 @@ def create_app(settings=None):
             """):
                 key = (row["city"], row["teacher"])
                 teacher = teacher_map.setdefault(key, {"city": row["city"], "teacher": row["teacher"],
-                                                       "modules": set(), "video_count": 0})
+                                                       "modules": set(), "video_count": 0,
+                                                       "telegram_username": telegram_names.get(key, "")})
                 teacher["modules"].add(row["module"])
                 teacher["video_count"] += row["video_count"]
         teachers = sorted(teacher_map.values(), key=lambda row: (row["city"].casefold(),
@@ -231,9 +243,43 @@ def create_app(settings=None):
         return render_template("tutors.html", title="Преподаватели", teachers=teachers,
                                modules=MODULES, course_filter=course_filter)
 
+    @app.route("/tutors/telegram", methods=["GET", "POST"])
+    def tutor_telegram_edit():
+        values = {
+            "city": request.values.get("city", "").strip(),
+            "teacher": request.values.get("teacher", "").strip(),
+            "telegram_username": "",
+        }
+        if not values["city"] or len(values["city"]) > 200 or not values["teacher"] or len(values["teacher"]) > 200:
+            abort(400, "Invalid teacher")
+        course_filter = request.values.get("module", "").strip()
+        if course_filter and course_filter not in MODULES:
+            abort(400, "Unknown course")
+        with connection(settings.db_path) as db:
+            current = db.execute("""SELECT telegram_username FROM tutor_contacts
+                WHERE city=? AND teacher=?""", [values["city"], values["teacher"]]).fetchone()
+        if current:
+            values["telegram_username"] = current["telegram_username"]
+        error = None
+        if request.method == "POST":
+            try:
+                values["telegram_username"] = normalize_telegram_username(
+                    request.form.get("telegram_username", ""))
+                with connection(settings.db_path) as db:
+                    db.execute("""INSERT INTO tutor_contacts(city,teacher,telegram_username)
+                        VALUES(:city,:teacher,:telegram_username)
+                        ON CONFLICT(city,teacher) DO UPDATE SET telegram_username=excluded.telegram_username""",
+                        values)
+                return redirect(url_for("tutors", module=course_filter or None))
+            except ValueError as exception:
+                error = str(exception)
+        return render_template("tutor_telegram_form.html", title="Telegram преподавателя",
+                               tutor=values, course_filter=course_filter, error=error), 400 if error else 200
+
     def coordinator_form_values():
         values = {key: request.form.get(key, "").strip() for key in
-                  ("city", "name", "phone", "personal_email", "corporate_email", "birth_date")}
+                  ("city", "name", "phone", "personal_email", "corporate_email", "birth_date",
+                   "telegram_username")}
         if not values["city"] or len(values["city"]) > 200:
             raise ValueError("Укажите город (до 200 символов).")
         if not values["name"] or len(values["name"]) > 200:
@@ -247,6 +293,7 @@ def create_app(settings=None):
                 date.fromisoformat(values["birth_date"])
             except ValueError as exception:
                 raise ValueError("Проверьте дату рождения.") from exception
+        values["telegram_username"] = normalize_telegram_username(values["telegram_username"])
         return values
 
     @app.get("/coordinators")
@@ -259,7 +306,7 @@ def create_app(settings=None):
     @app.route("/coordinators/new", methods=["GET", "POST"])
     def coordinator_new():
         values = {key: "" for key in ("city", "name", "phone", "personal_email", "corporate_email",
-                                      "birth_date")}
+                                      "birth_date", "telegram_username")}
         error = None
         if request.method == "POST":
             values = {key: request.form.get(key, "").strip() for key in values}
@@ -267,7 +314,8 @@ def create_app(settings=None):
                 values = coordinator_form_values()
                 with connection(settings.db_path) as db:
                     db.execute("""INSERT INTO coordinators(city,name,phone,personal_email,corporate_email,
-                        birth_date) VALUES(:city,:name,:phone,:personal_email,:corporate_email,:birth_date)""",
+                        birth_date,telegram_username) VALUES(:city,:name,:phone,:personal_email,
+                        :corporate_email,:birth_date,:telegram_username)""",
                         values)
                 return redirect(url_for("coordinators"))
             except ValueError as exception:
@@ -290,13 +338,14 @@ def create_app(settings=None):
         error = None
         if request.method == "POST":
             values.update({key: request.form.get(key, "").strip() for key in
-                           ("city", "name", "phone", "personal_email", "corporate_email", "birth_date")})
+                           ("city", "name", "phone", "personal_email", "corporate_email", "birth_date",
+                            "telegram_username")})
             try:
                 values = coordinator_form_values()
                 with connection(settings.db_path) as db:
                     db.execute("""UPDATE coordinators SET city=:city,name=:name,phone=:phone,
                         personal_email=:personal_email,corporate_email=:corporate_email,
-                        birth_date=:birth_date WHERE id=:id""",
+                        birth_date=:birth_date,telegram_username=:telegram_username WHERE id=:id""",
                         {**values, "id": coordinator_id})
                 return redirect(url_for("coordinators"))
             except ValueError as exception:

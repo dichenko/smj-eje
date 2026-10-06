@@ -2,6 +2,7 @@ from dataclasses import replace
 from io import BytesIO
 import re
 from datetime import datetime
+import sqlite3
 from urllib.parse import parse_qs, urlparse
 import zipfile
 import xml.etree.ElementTree as ET
@@ -78,6 +79,37 @@ def test_coordinator_edit_form_saves_contacts(settings):
     assert "+7 911 111-11-11" in listing and "two@smart-j.org" in listing
 
 
+def test_coordinator_telegram_username_is_saved_and_linked(settings):
+    coordinator_id = add_coordinator(settings)
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+    edit_url = f"/coordinators/{coordinator_id}/edit"
+    page = client.get(edit_url, base_url="https://localhost")
+    csrf_token = re.search(r'name="csrf_token" value="([^"]+)"', page.get_data(as_text=True))[1]
+    response = client.post(edit_url, base_url="https://localhost", data={
+        "csrf_token": csrf_token, "city": "Москва", "name": "Мария Координатор",
+        "telegram_username": "@maria_coord", "phone": "", "personal_email": "",
+        "corporate_email": "", "birth_date": "",
+    })
+    assert response.status_code == 302
+    listing = client.get("/coordinators", base_url="https://localhost").get_data(as_text=True)
+    assert 'href="https://telegram.me/maria_coord"' in listing
+
+
+def test_existing_coordinator_database_migrates_telegram_column(settings):
+    with sqlite3.connect(settings.db_path) as db:
+        db.execute("""CREATE TABLE coordinators (
+            id INTEGER PRIMARY KEY, city TEXT NOT NULL, name TEXT NOT NULL,
+            phone TEXT NOT NULL DEFAULT '', personal_email TEXT NOT NULL DEFAULT '',
+            corporate_email TEXT NOT NULL DEFAULT '', birth_date TEXT NOT NULL DEFAULT '',
+            UNIQUE(city,name))""")
+        db.execute("INSERT INTO coordinators(city,name) VALUES('Москва','Мария')")
+    initialize(settings.db_path)
+    with connection(settings.db_path) as db:
+        row = db.execute("SELECT name,telegram_username FROM coordinators").fetchone()
+        assert tuple(row) == ("Мария", "")
+
+
 def test_teacher_report_links_modules_and_counts_videos(settings, lesson):
     lessons = [lesson, replace(lesson, module="Matata", topic="Тема 2")]
     run(settings, lessons)
@@ -100,6 +132,23 @@ def test_teacher_report_links_modules_and_counts_videos(settings, lesson):
                       base_url="https://localhost").get_data(as_text=True).count("Скачать Excel") == 2
     assert client.get("/kids?city=Москва&teacher=Учитель 1",
                       base_url="https://localhost").status_code == 200
+
+
+def test_teacher_name_links_to_telegram_after_username_is_saved(settings, lesson):
+    run(settings, [lesson])
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+    edit_url = "/tutors/telegram?city=Москва&teacher=Учитель+1"
+    page = client.get(edit_url, base_url="https://localhost")
+    csrf_token = re.search(r'name="csrf_token" value="([^"]+)"', page.get_data(as_text=True))[1]
+    response = client.post(edit_url, base_url="https://localhost", data={
+        "csrf_token": csrf_token, "city": "Москва", "teacher": "Учитель 1",
+        "telegram_username": "teacher_example",
+    })
+    assert response.status_code == 302
+    listing = client.get("/tutors", base_url="https://localhost").get_data(as_text=True)
+    assert '<a href="https://telegram.me/teacher_example" target="_blank"' in listing
+    assert ">Учитель 1</a>" in listing
 
 
 def test_teacher_report_is_sorted_by_city_and_filterable_by_course(settings, lesson):

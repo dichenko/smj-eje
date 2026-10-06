@@ -12,7 +12,7 @@
   <thead><tr><th>Город (А–Я)</th><th>Преподаватель</th><th>Курсы</th><th>Видео</th></tr></thead>
   <tbody>{% for teacher in teachers %}<tr>
     <td>{{ teacher.city }}</td>
-    <td><strong>{{ teacher.teacher }}</strong></td>
+    <td><strong>{% if teacher.telegram_username %}<a href="https://telegram.me/{{ teacher.telegram_username }}" target="_blank" rel="noopener noreferrer">{{ teacher.teacher }}</a>{% else %}{{ teacher.teacher }}{% endif %}</strong><div><a class="muted small-link" href="{{ url_for('tutor_telegram_edit', city=teacher.city, teacher=teacher.teacher, module=course_filter or None) }}">{% if teacher.telegram_username %}Изменить Telegram{% else %}Добавить Telegram{% endif %}</a></div></td>
     <td>{% for module in teacher.modules %}<a class="badge module-link {{ module.lower() }}" href="{{ url_for(module.lower(), city=teacher.city, teacher=teacher.teacher) }}">{{ module }}</a>{% else %}<span class="muted">Нет занятий</span>{% endfor %}</td>
     <td><a class="count-link" href="{{ url_for('videos', city=teacher.city, teacher=teacher.teacher) }}">{{ teacher.video_count }}</a></td>
   </tr>{% else %}<tr><td class="empty" colspan="4">{% if course_filter %}Нет преподавателей по курсу {{ course_filter }}.{% else %}Преподаватели появятся после загрузки занятий.{% endif %}</td></tr>{% endfor %}</tbody>

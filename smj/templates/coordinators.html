@@ -3,15 +3,16 @@
 <div class="page-heading"><div><p class="eyebrow">СПРАВОЧНИК</p><h1>Координаторы</h1><p class="muted">Контакты можно изменить в любой момент.</p></div><a class="button" href="{{ url_for('coordinator_new') }}">Добавить координатора</a></div>
 <section class="card table-scroll">
 <table>
-  <thead><tr><th>Город</th><th>ФИО</th><th>Контакт</th><th>Личная почта</th><th>Корпоративная почта</th><th>Дата рождения</th><th></th></tr></thead>
+  <thead><tr><th>Город</th><th>ФИО</th><th>Telegram</th><th>Контакт</th><th>Личная почта</th><th>Корпоративная почта</th><th>Дата рождения</th><th></th></tr></thead>
   <tbody>{% for coordinator in coordinators %}<tr>
     <td>{{ coordinator.city }}</td><td><strong>{{ coordinator.name }}</strong></td>
+    <td>{% if coordinator.telegram_username %}<a href="https://telegram.me/{{ coordinator.telegram_username }}" target="_blank" rel="noopener noreferrer">@{{ coordinator.telegram_username }}</a>{% else %}—{% endif %}</td>
     <td class="preserve-lines">{{ coordinator.phone or '—' }}</td>
     <td class="preserve-lines">{{ coordinator.personal_email or '—' }}</td>
     <td class="preserve-lines">{{ coordinator.corporate_email or '—' }}</td>
     <td class="nowrap">{% if coordinator.birth_date %}{{ coordinator.birth_date[8:10] }}.{{ coordinator.birth_date[5:7] }}.{{ coordinator.birth_date[:4] }}{% else %}—{% endif %}</td>
     <td><a class="quiet" href="{{ url_for('coordinator_edit', coordinator_id=coordinator.id) }}">Редактировать</a></td>
-  </tr>{% else %}<tr><td class="empty" colspan="7">Координаторов пока нет.</td></tr>{% endfor %}</tbody>
+  </tr>{% else %}<tr><td class="empty" colspan="8">Координаторов пока нет.</td></tr>{% endfor %}</tbody>
 </table>
 </section>
 {% endblock %}

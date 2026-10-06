@@ -58,9 +58,16 @@ def initialize(path):
                 personal_email TEXT NOT NULL DEFAULT '',
                 corporate_email TEXT NOT NULL DEFAULT '',
                 birth_date TEXT NOT NULL DEFAULT '',
+                telegram_username TEXT NOT NULL DEFAULT '',
                 UNIQUE(city, name)
             );
             CREATE INDEX IF NOT EXISTS coordinators_city ON coordinators(city, name);
+            CREATE TABLE IF NOT EXISTS tutor_contacts (
+                city TEXT NOT NULL,
+                teacher TEXT NOT NULL,
+                telegram_username TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY(city, teacher)
+            );
             CREATE TABLE IF NOT EXISTS videos (
                 id INTEGER PRIMARY KEY,
                 city TEXT NOT NULL,
@@ -77,6 +84,10 @@ def initialize(path):
             );
             CREATE INDEX IF NOT EXISTS videos_teacher ON videos(city, teacher, request_date);
         """)
+        # Existing VPS databases were created before Telegram fields existed.
+        coordinator_columns = {row["name"] for row in db.execute("PRAGMA table_info(coordinators)")}
+        if "telegram_username" not in coordinator_columns:
+            db.execute("ALTER TABLE coordinators ADD COLUMN telegram_username TEXT NOT NULL DEFAULT ''")
 
 
 def upsert_coordinators(db, rows):

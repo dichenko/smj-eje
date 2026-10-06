@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">КОМАНДА</p><h1>{{ title }}</h1></div></div>
+<section class="card form-card">
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<form method="post" class="form-grid">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="city" value="{{ tutor.city }}">
+  <input type="hidden" name="teacher" value="{{ tutor.teacher }}">
+  <input type="hidden" name="module" value="{{ course_filter }}">
+  <div><strong>Город</strong><p>{{ tutor.city }}</p></div>
+  <div><strong>Преподаватель</strong><p>{{ tutor.teacher }}</p></div>
+  <label class="wide-field">Telegram username<input name="telegram_username" value="{{ tutor.telegram_username }}" maxlength="32" placeholder="username"><span class="field-hint">Можно вводить с символом @ или без него.</span></label>
+  <div class="form-actions"><button type="submit">Сохранить</button><a class="quiet" href="{{ url_for('tutors', module=course_filter or None) }}">Отмена</a></div>
+</form>
+</section>
+{% endblock %}

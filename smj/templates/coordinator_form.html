@@ -8,6 +8,7 @@
   <label>Город<input name="city" value="{{ coordinator.city }}" maxlength="200" required></label>
   <label>ФИО<input name="name" value="{{ coordinator.name }}" maxlength="200" required></label>
   <label>Контакт<input name="phone" value="{{ coordinator.phone }}" maxlength="200"></label>
+  <label>Telegram username<input name="telegram_username" value="{{ coordinator.telegram_username }}" maxlength="32" placeholder="username"></label>
   <label>Личная почта<input type="text" name="personal_email" value="{{ coordinator.personal_email }}" maxlength="500"></label>
   <label class="wide-field">Корпоративная почта<textarea name="corporate_email" rows="3" maxlength="2000">{{ coordinator.corporate_email }}</textarea><span class="field-hint">Можно указать несколько адресов, каждый с новой строки.</span></label>
   <label>Дата рождения<input type="date" name="birth_date" value="{{ coordinator.birth_date }}"></label>
