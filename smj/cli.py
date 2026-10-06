@@ -1,14 +1,16 @@
 import argparse
 from datetime import datetime
+import json
 import logging
 import os
 from pathlib import Path
 import secrets
 import shutil
 import sqlite3
+import sys
 
 from .config import Settings
-from .db import connection, initialize
+from .db import connection, initialize, upsert_coordinators
 from .sync import AlreadyRunning, synchronize
 
 
@@ -53,6 +55,7 @@ def main(argv=None):
     sync_parser.add_argument("--accept-large-deletions", action="store_true",
                              help="Accept a large change after manually verifying the source")
     commands.add_parser("backup", help="Create a consistent SQLite backup")
+    commands.add_parser("import-coordinators", help="Upsert coordinator JSON records from stdin")
     commands.add_parser("secrets", help="Generate new APP_PASSWORD and FLASK_SECRET_KEY")
     serve = commands.add_parser("serve", help="Local development server only")
     serve.add_argument("--port", type=int, default=8081)
@@ -73,6 +76,14 @@ def main(argv=None):
             synchronize(settings, accept_large_deletions=args.accept_large_deletions)
         elif args.command == "backup":
             backup(settings)
+        elif args.command == "import-coordinators":
+            rows = json.load(sys.stdin)
+            if not isinstance(rows, list):
+                raise ValueError("Expected a JSON array of coordinators")
+            initialize(settings.db_path)
+            with connection(settings.db_path) as db:
+                imported = upsert_coordinators(db, rows)
+            logging.info("Coordinator contacts imported: %s", imported)
         elif args.command == "serve":
             if settings.production:
                 raise ValueError("Use Gunicorn in production; set APP_ENV=development for local preview")

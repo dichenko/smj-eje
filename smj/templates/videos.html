@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">НАБЛЮДЕНИЯ ЗАНЯТИЙ</p><h1>Видео</h1><p class="muted">Запросы, ссылки и заметки по каждому просмотру занятия.</p></div><div class="heading-actions"><span class="total"><strong>{{ videos|length }}</strong><span>записей</span></span><a class="button" href="{{ url_for('video_new') }}">Добавить видео</a></div></div>
+<section class="card">
+<form class="filters video-filters" method="get">
+  <label>Город<input name="city" value="{{ city_filter }}" list="video-cities"><datalist id="video-cities">{% for city in cities %}<option value="{{ city }}">{% endfor %}</datalist></label>
+  <label>Преподаватель<input name="teacher" value="{{ teacher_filter }}" list="video-teachers"><datalist id="video-teachers">{% for teacher in teachers %}<option value="{{ teacher }}">{% endfor %}</datalist></label>
+  <div class="filter-actions"><button type="submit">Показать</button><a class="quiet" href="{{ url_for('videos') }}">Сбросить</a></div>
+</form>
+</section>
+<section class="card table-scroll">
+<table>
+  <thead><tr><th>Дата запроса</th><th>Дата отправки</th><th>Преподаватель</th><th>Город</th><th>Модуль</th><th>Координатор</th><th>Видео</th><th>Отчет</th><th></th></tr></thead>
+  <tbody>{% for video in videos %}<tr>
+    <td class="nowrap">{{ video.request_date[8:10] }}.{{ video.request_date[5:7] }}.{{ video.request_date[:4] }}</td>
+    <td class="nowrap">{% if video.sent_date %}{{ video.sent_date[8:10] }}.{{ video.sent_date[5:7] }}.{{ video.sent_date[:4] }}{% else %}<span class="muted">Не отправлено</span>{% endif %}</td>
+    <td><strong>{{ video.teacher }}</strong></td><td>{{ video.city }}</td><td><span class="badge {{ video.module.lower() }}">{{ video.module }}</span></td>
+    <td>{{ video.coordinator_name or '—' }}</td>
+    <td>{% if video.video_url %}<a href="{{ video.video_url }}" target="_blank" rel="noopener noreferrer">Открыть</a>{% else %}—{% endif %}</td>
+    <td><a href="{{ url_for('video_excel_report', video_id=video.id) }}">Скачать Excel</a></td>
+    <td><a class="quiet" href="{{ url_for('video_edit', video_id=video.id) }}">Изменить</a></td>
+  </tr>{% else %}<tr><td class="empty" colspan="9">Видео пока не добавлены.</td></tr>{% endfor %}</tbody>
+</table>
+</section>
+{% endblock %}

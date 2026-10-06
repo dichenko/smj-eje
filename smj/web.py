@@ -5,12 +5,15 @@ import hashlib
 import hmac
 import secrets
 import time
+from urllib.parse import urlsplit
 
-from flask import Flask, abort, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, abort, jsonify, redirect, render_template, request, send_file, session, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.utils import secure_filename
 
 from .config import MODULES, Settings
 from .db import connection, distinct_values, initialize, query_lessons, sync_status, utc_now
+from .excel import video_report
 
 
 def create_app(settings=None):
@@ -187,7 +190,260 @@ def create_app(settings=None):
 
     @app.get("/tutors")
     def tutors():
-        return report("Отчет по преподавателям")
+        with connection(settings.db_path) as db:
+            teacher_map = {}
+            for row in db.execute("SELECT DISTINCT city,teacher,module FROM lessons"):
+                key = (row["city"], row["teacher"])
+                teacher_map.setdefault(key, {"city": row["city"], "teacher": row["teacher"],
+                                              "modules": set(), "video_count": 0})
+                teacher_map[key]["modules"].add(row["module"])
+            for row in db.execute("""
+                SELECT city,teacher,module,COUNT(*) AS video_count FROM videos
+                GROUP BY city,teacher,module
+            """):
+                key = (row["city"], row["teacher"])
+                teacher = teacher_map.setdefault(key, {"city": row["city"], "teacher": row["teacher"],
+                                                       "modules": set(), "video_count": 0})
+                teacher["modules"].add(row["module"])
+                teacher["video_count"] += row["video_count"]
+        teachers = sorted(teacher_map.values(), key=lambda row: (row["city"].casefold(),
+                                                                  row["teacher"].casefold()))
+        module_order = {name: index for index, name in enumerate(MODULES)}
+        for teacher in teachers:
+            teacher["modules"] = sorted(teacher["modules"], key=lambda name: module_order.get(name, 99))
+        return render_template("tutors.html", title="Преподаватели", teachers=teachers)
+
+    def coordinator_form_values():
+        values = {key: request.form.get(key, "").strip() for key in
+                  ("city", "name", "phone", "personal_email", "corporate_email", "birth_date")}
+        if not values["city"] or len(values["city"]) > 200:
+            raise ValueError("Укажите город (до 200 символов).")
+        if not values["name"] or len(values["name"]) > 200:
+            raise ValueError("Укажите ФИО (до 200 символов).")
+        for key, title, limit in (("phone", "Контакт", 200), ("personal_email", "Личная почта", 500),
+                                  ("corporate_email", "Корпоративная почта", 2000)):
+            if len(values[key]) > limit:
+                raise ValueError(f"Поле «{title}» слишком длинное.")
+        if values["birth_date"]:
+            try:
+                date.fromisoformat(values["birth_date"])
+            except ValueError as exception:
+                raise ValueError("Проверьте дату рождения.") from exception
+        return values
+
+    @app.get("/coordinators")
+    def coordinators():
+        with connection(settings.db_path) as db:
+            rows = [dict(row) for row in db.execute(
+                "SELECT * FROM coordinators ORDER BY city COLLATE NOCASE,name COLLATE NOCASE")]
+        return render_template("coordinators.html", title="Координаторы", coordinators=rows)
+
+    @app.route("/coordinators/new", methods=["GET", "POST"])
+    def coordinator_new():
+        values = {key: "" for key in ("city", "name", "phone", "personal_email", "corporate_email",
+                                      "birth_date")}
+        error = None
+        if request.method == "POST":
+            values = {key: request.form.get(key, "").strip() for key in values}
+            try:
+                values = coordinator_form_values()
+                with connection(settings.db_path) as db:
+                    db.execute("""INSERT INTO coordinators(city,name,phone,personal_email,corporate_email,
+                        birth_date) VALUES(:city,:name,:phone,:personal_email,:corporate_email,:birth_date)""",
+                        values)
+                return redirect(url_for("coordinators"))
+            except ValueError as exception:
+                error = str(exception)
+            except Exception as exception:
+                if "UNIQUE constraint failed" in str(exception):
+                    error = "Координатор с таким именем уже есть в этом городе."
+                else:
+                    raise
+        return render_template("coordinator_form.html", title="Новый координатор", coordinator=values,
+                               error=error)
+
+    @app.route("/coordinators/<int:coordinator_id>/edit", methods=["GET", "POST"])
+    def coordinator_edit(coordinator_id):
+        with connection(settings.db_path) as db:
+            current = db.execute("SELECT * FROM coordinators WHERE id=?", [coordinator_id]).fetchone()
+        if not current:
+            abort(404)
+        values = dict(current)
+        error = None
+        if request.method == "POST":
+            values.update({key: request.form.get(key, "").strip() for key in
+                           ("city", "name", "phone", "personal_email", "corporate_email", "birth_date")})
+            try:
+                values = coordinator_form_values()
+                with connection(settings.db_path) as db:
+                    db.execute("""UPDATE coordinators SET city=:city,name=:name,phone=:phone,
+                        personal_email=:personal_email,corporate_email=:corporate_email,
+                        birth_date=:birth_date WHERE id=:id""",
+                        {**values, "id": coordinator_id})
+                return redirect(url_for("coordinators"))
+            except ValueError as exception:
+                error = str(exception)
+            except Exception as exception:
+                if "UNIQUE constraint failed" in str(exception):
+                    error = "Координатор с таким именем уже есть в этом городе."
+                else:
+                    raise
+        return render_template("coordinator_form.html", title="Редактировать координатора",
+                               coordinator=values, error=error)
+
+    def video_form_values():
+        values = {key: request.form.get(key, "").strip() for key in
+                  ("city", "teacher", "request_date", "sent_date", "module", "video_url",
+                   "positive_notes", "growth_notes", "coordinator_id")}
+        if not values["city"] or len(values["city"]) > 200:
+            raise ValueError("Укажите город (до 200 символов).")
+        if not values["teacher"] or len(values["teacher"]) > 200:
+            raise ValueError("Укажите преподавателя (до 200 символов).")
+        try:
+            date.fromisoformat(values["request_date"])
+            if values["sent_date"]:
+                date.fromisoformat(values["sent_date"])
+        except ValueError as exception:
+            raise ValueError("Проверьте даты запроса и отправки.") from exception
+        if values["module"] not in MODULES:
+            raise ValueError("Выберите модуль из списка.")
+        if len(values["video_url"]) > 2048:
+            raise ValueError("Ссылка слишком длинная.")
+        if values["video_url"]:
+            parsed = urlsplit(values["video_url"])
+            if parsed.scheme not in {"https", "http"} or not parsed.netloc or parsed.username:
+                raise ValueError("Ссылка должна начинаться с http:// или https://.")
+        if values["sent_date"] and not values["video_url"]:
+            raise ValueError("Добавьте ссылку на отправленное видео.")
+        for key, title in (("positive_notes", "Поле «Что хорошо»"),
+                            ("growth_notes", "Поле «Зона роста»")):
+            if len(values[key]) > 16000:
+                raise ValueError(f"{title} не должно превышать 16 000 символов.")
+        try:
+            values["coordinator_id"] = int(values["coordinator_id"]) if values["coordinator_id"] else None
+        except ValueError as exception:
+            raise ValueError("Выберите координатора из списка.") from exception
+        if values["coordinator_id"] is not None:
+            with connection(settings.db_path) as db:
+                exists = db.execute("SELECT 1 FROM coordinators WHERE id=?",
+                                    [values["coordinator_id"]]).fetchone()
+            if not exists:
+                raise ValueError("Выбранный координатор не найден.")
+        return values
+
+    def video_form_choices(city=""):
+        with connection(settings.db_path) as db:
+            teachers = sorted({row[0] for row in db.execute(
+                "SELECT teacher FROM lessons UNION SELECT teacher FROM videos")}, key=str.casefold)
+            cities = sorted({row[0] for row in db.execute(
+                "SELECT city FROM lessons UNION SELECT city FROM videos UNION SELECT city FROM coordinators")},
+                key=str.casefold)
+            coordinator_rows = [dict(row) for row in db.execute(
+                "SELECT id,city,name FROM coordinators ORDER BY city COLLATE NOCASE,name COLLATE NOCASE")]
+            default_coordinator = db.execute(
+                "SELECT id FROM coordinators WHERE city=? COLLATE NOCASE ORDER BY id LIMIT 1", [city]
+            ).fetchone() if city else None
+        return teachers, cities, coordinator_rows, default_coordinator[0] if default_coordinator else None
+
+    @app.get("/videos")
+    def videos():
+        city_filter = request.args.get("city", "").strip()
+        teacher_filter = request.args.get("teacher", "").strip()
+        clauses, params = [], []
+        if city_filter:
+            clauses.append("v.city=?")
+            params.append(city_filter)
+        if teacher_filter:
+            clauses.append("v.teacher=?")
+            params.append(teacher_filter)
+        where = " WHERE " + " AND ".join(clauses) if clauses else ""
+        with connection(settings.db_path) as db:
+            rows = [dict(row) for row in db.execute("""
+                SELECT v.*, c.name AS coordinator_name FROM videos v
+                LEFT JOIN coordinators c ON c.id=v.coordinator_id
+            """ + where + " ORDER BY v.request_date DESC,v.city COLLATE NOCASE,v.teacher COLLATE NOCASE,v.id DESC",
+                params)]
+        teachers, cities, _, _ = video_form_choices()
+        return render_template("videos.html", title="Видео", videos=rows, city_filter=city_filter,
+                               teacher_filter=teacher_filter, teachers=teachers, cities=cities)
+
+    def render_video_form(values, error=None, video_id=None):
+        teachers, cities, coordinator_rows, default_coordinator = video_form_choices(values.get("city", ""))
+        if not values.get("coordinator_id"):
+            values["coordinator_id"] = default_coordinator
+        return render_template("video_form.html", title="Видео преподавателя" if video_id else "Добавить видео",
+                               video=values, teachers=teachers, cities=cities,
+                               coordinators=coordinator_rows, error=error, video_id=video_id), 400 if error else 200
+
+    @app.route("/videos/new", methods=["GET", "POST"])
+    def video_new():
+        values = {key: "" for key in ("city", "teacher", "request_date", "sent_date", "module",
+                                      "video_url", "positive_notes", "growth_notes", "coordinator_id")}
+        values["request_date"] = utc_now().astimezone(settings.timezone).date().isoformat()
+        values["module"] = next(iter(MODULES))
+        error = None
+        if request.method == "POST":
+            values = {key: request.form.get(key, "").strip() for key in values}
+            try:
+                values = video_form_values()
+                now = utc_now().isoformat()
+                if values["coordinator_id"] is None:
+                    _, _, _, match = video_form_choices(values["city"])
+                    values["coordinator_id"] = match
+                with connection(settings.db_path) as db:
+                    db.execute("""INSERT INTO videos(city,teacher,coordinator_id,request_date,sent_date,
+                        module,video_url,positive_notes,growth_notes,created_at,updated_at)
+                        VALUES(?,?,?,?,?,?,?,?,?,?,?)""", [values["city"], values["teacher"],
+                        values["coordinator_id"], values["request_date"], values["sent_date"] or None,
+                        values["module"], values["video_url"], values["positive_notes"],
+                        values["growth_notes"], now, now])
+                return redirect(url_for("videos"))
+            except ValueError as exception:
+                error = str(exception)
+        return render_video_form(values, error)
+
+    @app.route("/videos/<int:video_id>/edit", methods=["GET", "POST"])
+    def video_edit(video_id):
+        with connection(settings.db_path) as db:
+            current = db.execute("SELECT * FROM videos WHERE id=?", [video_id]).fetchone()
+        if not current:
+            abort(404)
+        values = dict(current)
+        error = None
+        if request.method == "POST":
+            values.update({key: request.form.get(key, "").strip() for key in
+                           ("city", "teacher", "request_date", "sent_date", "module", "video_url",
+                            "positive_notes", "growth_notes", "coordinator_id")})
+            try:
+                values = video_form_values()
+                now = utc_now().isoformat()
+                if values["coordinator_id"] is None:
+                    _, _, _, match = video_form_choices(values["city"])
+                    values["coordinator_id"] = match
+                with connection(settings.db_path) as db:
+                    db.execute("""UPDATE videos SET city=?,teacher=?,coordinator_id=?,request_date=?,
+                        sent_date=?,module=?,video_url=?,positive_notes=?,growth_notes=?,updated_at=? WHERE id=?""",
+                        [values["city"], values["teacher"], values["coordinator_id"], values["request_date"],
+                         values["sent_date"] or None, values["module"], values["video_url"],
+                         values["positive_notes"], values["growth_notes"], now, video_id])
+                return redirect(url_for("videos"))
+            except ValueError as exception:
+                error = str(exception)
+        return render_video_form(values, error, video_id)
+
+    @app.get("/videos/<int:video_id>/report.xlsx")
+    def video_excel_report(video_id):
+        with connection(settings.db_path) as db:
+            video = db.execute("""
+                SELECT v.*, c.name AS coordinator_name FROM videos v
+                LEFT JOIN coordinators c ON c.id=v.coordinator_id WHERE v.id=?
+            """, [video_id]).fetchone()
+        if not video:
+            abort(404)
+        filename = secure_filename(f"{video['request_date']}-{video['city']}-{video['teacher']}-"
+                                   f"{video['module']}.xlsx") or f"video-{video_id}.xlsx"
+        return send_file(video_report(dict(video)), as_attachment=True, download_name=filename,
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     @app.get("/cities")
     def cities():

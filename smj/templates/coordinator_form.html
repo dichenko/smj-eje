@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">СПРАВОЧНИК</p><h1>{{ title }}</h1></div></div>
+<section class="card form-card">
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<form method="post" class="form-grid">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Город<input name="city" value="{{ coordinator.city }}" maxlength="200" required></label>
+  <label>ФИО<input name="name" value="{{ coordinator.name }}" maxlength="200" required></label>
+  <label>Контакт<input name="phone" value="{{ coordinator.phone }}" maxlength="200"></label>
+  <label>Личная почта<input type="text" name="personal_email" value="{{ coordinator.personal_email }}" maxlength="500"></label>
+  <label class="wide-field">Корпоративная почта<textarea name="corporate_email" rows="3" maxlength="2000">{{ coordinator.corporate_email }}</textarea><span class="field-hint">Можно указать несколько адресов, каждый с новой строки.</span></label>
+  <label>Дата рождения<input type="date" name="birth_date" value="{{ coordinator.birth_date }}"></label>
+  <div class="form-actions"><button type="submit">Сохранить</button><a class="quiet" href="{{ url_for('coordinators') }}">Отмена</a></div>
+</form>
+</section>
+{% endblock %}

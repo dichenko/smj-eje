@@ -50,7 +50,57 @@ def initialize(path):
                 attempted_at REAL NOT NULL
             );
             CREATE INDEX IF NOT EXISTS login_attempt_time ON login_attempts(attempted_at);
+            CREATE TABLE IF NOT EXISTS coordinators (
+                id INTEGER PRIMARY KEY,
+                city TEXT NOT NULL,
+                name TEXT NOT NULL,
+                phone TEXT NOT NULL DEFAULT '',
+                personal_email TEXT NOT NULL DEFAULT '',
+                corporate_email TEXT NOT NULL DEFAULT '',
+                birth_date TEXT NOT NULL DEFAULT '',
+                UNIQUE(city, name)
+            );
+            CREATE INDEX IF NOT EXISTS coordinators_city ON coordinators(city, name);
+            CREATE TABLE IF NOT EXISTS videos (
+                id INTEGER PRIMARY KEY,
+                city TEXT NOT NULL,
+                teacher TEXT NOT NULL,
+                coordinator_id INTEGER,
+                request_date TEXT NOT NULL,
+                sent_date TEXT,
+                module TEXT NOT NULL,
+                video_url TEXT NOT NULL DEFAULT '',
+                positive_notes TEXT NOT NULL DEFAULT '',
+                growth_notes TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS videos_teacher ON videos(city, teacher, request_date);
         """)
+
+
+def upsert_coordinators(db, rows):
+    """Import coordinator contact rows without replacing unrelated database records."""
+    imported = 0
+    for row in rows:
+        city = str(row.get("city", "")).strip()
+        name = str(row.get("name", "")).strip()
+        if not city or not name:
+            raise ValueError("Every coordinator requires a city and name")
+        db.execute("""
+            INSERT INTO coordinators(city,name,phone,personal_email,corporate_email,birth_date)
+            VALUES(?,?,?,?,?,?)
+            ON CONFLICT(city,name) DO UPDATE SET
+                phone=excluded.phone,
+                personal_email=excluded.personal_email,
+                corporate_email=excluded.corporate_email,
+                birth_date=excluded.birth_date
+        """, [city, name, str(row.get("phone", "")).strip(),
+              str(row.get("personal_email", "")).strip(),
+              str(row.get("corporate_email", "")).strip(),
+              str(row.get("birth_date", "")).strip()])
+        imported += 1
+    return imported
 
 
 def utc_now():

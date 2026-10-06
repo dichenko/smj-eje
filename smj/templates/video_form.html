@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">НАБЛЮДЕНИЯ ЗАНЯТИЙ</p><h1>{{ title }}</h1></div></div>
+<section class="card form-card">
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<form method="post" class="form-grid">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Преподаватель<input name="teacher" value="{{ video.teacher }}" list="video-teachers" maxlength="200" required><datalist id="video-teachers">{% for teacher in teachers %}<option value="{{ teacher }}">{% endfor %}</datalist></label>
+  <label>Город<input name="city" value="{{ video.city }}" list="video-cities" maxlength="200" required><datalist id="video-cities">{% for city in cities %}<option value="{{ city }}">{% endfor %}</datalist></label>
+  <label>Дата запроса<input type="date" name="request_date" value="{{ video.request_date }}" required></label>
+  <label>Дата отправки<input type="date" name="sent_date" value="{{ video.sent_date or '' }}"></label>
+  <label>Модуль<select name="module" required>{% for module in modules %}<option value="{{ module }}" {% if video.module == module %}selected{% endif %}>{{ module }}</option>{% endfor %}</select></label>
+  <label>Координатор<select name="coordinator_id"><option value="">Автоматически по городу</option>{% for coordinator in coordinators %}<option value="{{ coordinator.id }}" {% if video.coordinator_id == coordinator.id %}selected{% endif %}>{{ coordinator.city }} — {{ coordinator.name }}</option>{% endfor %}</select></label>
+  <label class="wide-field">Ссылка на видео<input type="url" name="video_url" value="{{ video.video_url }}" maxlength="2048" placeholder="https://…"><span class="field-hint">Если указана дата отправки, ссылка обязательна.</span></label>
+  <label class="wide-field">Что хорошо<textarea name="positive_notes" rows="5" maxlength="16000">{{ video.positive_notes }}</textarea></label>
+  <label class="wide-field">Зона роста<textarea name="growth_notes" rows="5" maxlength="16000">{{ video.growth_notes }}</textarea></label>
+  <div class="form-actions"><button type="submit">Сохранить</button><a class="quiet" href="{{ url_for('videos') }}">Отмена</a>{% if video_id %}<a class="quiet" href="{{ url_for('video_excel_report', video_id=video_id) }}">Скачать Excel</a>{% endif %}</div>
+</form>
+</section>
+{% endblock %}

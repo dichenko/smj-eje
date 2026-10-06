@@ -20,5 +20,6 @@ logs/
 *.egg-info/
 dist/
 build/
+ReportExample/
 .idea/
 .vscode/
