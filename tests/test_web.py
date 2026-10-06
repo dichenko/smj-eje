@@ -27,7 +27,8 @@ def app(settings):
 
 
 @pytest.mark.parametrize("path", ["/", "/weekly", "/weekly/2026-09-28", "/matata",
-    "/kids", "/userbasic", "/junior", "/tutors", "/cities", "/lessons"])
+    "/kids", "/userbasic", "/junior", "/tutors", "/tutors/profile?city=Москва&teacher=Учитель+1",
+    "/cities", "/lessons"])
 def test_every_report_requires_auth(app, path):
     response = app.test_client().get(path, base_url="https://localhost")
     assert response.status_code == 302
@@ -101,7 +102,8 @@ def test_reports_render_with_data(app, settings, lesson, path):
     response = client.get(path, base_url="https://localhost")
     assert response.status_code == 200
     assert "Обновлено" in response.get_data(as_text=True)
-    assert "script-src 'none'" in response.headers["Content-Security-Policy"]
+    assert "script-src 'self'" in response.headers["Content-Security-Policy"]
+    assert "'unsafe-inline'" not in response.headers["Content-Security-Policy"]
 
 
 def test_source_unavailable_does_not_block_reports(settings, lesson):
@@ -133,6 +135,20 @@ def test_svg_favicon_is_linked_and_served(app, settings):
     icon = client.get("/static/favicon.svg", base_url="https://localhost")
     assert icon.status_code == 200
     assert b">S</text>" in icon.data and b">J</text>" in icon.data
+
+
+def test_tutor_search_is_realtime_and_scripts_are_allowed_from_static(app, settings, lesson):
+    run(settings, [lesson])
+    client = app.test_client()
+    login(client, settings.password)
+    page = client.get("/tutors", base_url="https://localhost").get_data(as_text=True)
+    assert 'id="tutor-search" type="search"' in page
+    assert 'data-tutor-row data-name="Учитель 1"' in page
+    assert "tutors-search.js" in page
+    script = client.get("/static/tutors-search.js", base_url="https://localhost")
+    assert script.status_code == 200
+    assert b"addEventListener(\"input\"" in script.data
+    assert b"word.startsWith(term)" in script.data
 
 
 def test_non_ascii_csrf_rejected_without_server_error(app):

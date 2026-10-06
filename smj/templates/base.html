@@ -15,7 +15,7 @@
     <a {% if request.endpoint == 'weekly' %}class="active"{% endif %} href="{{ url_for('weekly') }}">Неделя</a>
     {% for module in modules %}<a {% if request.endpoint == module.lower() %}class="active"{% endif %} href="{{ url_for(module.lower()) }}">{{ module }}</a>{% endfor %}
     <a {% if request.endpoint == 'cities' %}class="active"{% endif %} href="{{ url_for('cities') }}">Города</a>
-    <a {% if request.endpoint == 'tutors' %}class="active"{% endif %} href="{{ url_for('tutors') }}">Преподаватели</a>
+    <a {% if request.endpoint in ['tutors','tutor_profile'] %}class="active"{% endif %} href="{{ url_for('tutors') }}">Преподаватели</a>
     <a {% if request.endpoint in ['videos','video_new','video_edit','video_excel_report'] %}class="active"{% endif %} href="{{ url_for('videos') }}">Видео</a>
     <a {% if request.endpoint in ['coordinators','coordinator_new','coordinator_edit'] %}class="active"{% endif %} href="{{ url_for('coordinators') }}">Координаторы</a>
     <a {% if request.endpoint == 'lessons' %}class="active"{% endif %} href="{{ url_for('lessons') }}">Все</a>
@@ -32,5 +32,6 @@
 {% endif %}
 <main>{% block content %}{% endblock %}</main>
 {% if is_authenticated %}<footer>Занятия младше 7 дней сверяются с Smart-J. Более старые записи остаются неизменными.</footer>{% endif %}
+{% block scripts %}{% endblock %}
 </body>
 </html>

@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">ПРЕПОДАВАТЕЛЬ</p><h1>{{ tutor.teacher }}</h1><p class="muted">{{ tutor.city }}</p></div><a class="quiet" href="{{ url_for('tutors') }}">← К списку преподавателей</a></div>
+<section class="card tutor-profile-card">
+  <h2>Профиль</h2>
+  <div class="tutor-profile-grid">
+    <div><span class="muted">Город</span><strong>{{ tutor.city }}</strong></div>
+    <div><span class="muted">Занятий</span><strong>{{ lessons|length }}</strong></div>
+    <div><span class="muted">Видео</span><strong>{{ videos|length }}</strong></div>
+    <div class="tutor-profile-modules"><span class="muted">Курсы</span><div>{% for module in modules %}<a class="badge module-link {{ module.lower() }}" href="{{ url_for(module.lower(), city=tutor.city, teacher=tutor.teacher) }}">{{ module }}</a>{% else %}<span>—</span>{% endfor %}</div></div>
+  </div>
+  <div class="tutor-telegram">
+    <strong>Telegram</strong>
+    {% if tutor.telegram_username %}<a href="https://telegram.me/{{ tutor.telegram_username }}" target="_blank" rel="noopener noreferrer">@{{ tutor.telegram_username }}</a>{% else %}<span class="muted">Username пока не указан</span>{% endif %}
+    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+    <form method="post" class="tutor-telegram-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="city" value="{{ tutor.city }}">
+      <input type="hidden" name="teacher" value="{{ tutor.teacher }}">
+      <label>Username<input name="telegram_username" value="{{ tutor.telegram_input }}" maxlength="32" placeholder="username"></label>
+      <button type="submit">Сохранить</button>
+    </form>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Видео занятий</h2>
+  {% if videos %}
+  <div class="table-scroll"><table>
+    <thead><tr><th>Дата запроса</th><th>Дата отправки</th><th>Курс</th><th>Координатор</th><th>Видео и отчет</th><th>Отчет методиста</th></tr></thead>
+    <tbody>{% for video in videos %}<tr>
+      <td class="nowrap">{{ video.request_date[8:10] }}.{{ video.request_date[5:7] }}.{{ video.request_date[:4] }}</td>
+      <td class="nowrap">{% if video.sent_date %}{{ video.sent_date[8:10] }}.{{ video.sent_date[5:7] }}.{{ video.sent_date[:4] }}{% else %}—{% endif %}</td>
+      <td><span class="badge {{ video.module.lower() }}">{{ video.module }}</span></td>
+      <td>{{ video.coordinator_name or '—' }}</td>
+      <td>{% if video.video_url %}<a href="{{ video.video_url }}" target="_blank" rel="noopener noreferrer">Открыть видео</a><br>{% endif %}<a href="{{ url_for('video_excel_report', video_id=video.id) }}">Скачать Excel</a></td>
+      <td class="preserve-lines">{% if video.positive_notes %}<strong>Хорошо:</strong> {{ video.positive_notes }}<br>{% endif %}{% if video.growth_notes %}<strong>Зона роста:</strong> {{ video.growth_notes }}{% endif %}{% if not video.positive_notes and not video.growth_notes %}—{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="muted">Для преподавателя пока нет видео.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Все занятия</h2>
+  {% if lessons %}{% include 'table.html' %}{% else %}<p class="muted">Занятий пока нет.</p>{% endif %}
+</section>
+{% endblock %}

@@ -8,6 +8,7 @@ import zipfile
 import xml.etree.ElementTree as ET
 
 import pytest
+from bs4 import BeautifulSoup
 
 from smj.db import connection, initialize, upsert_coordinators
 from smj.web import create_app
@@ -40,7 +41,7 @@ def add_coordinator(settings, **overrides):
                           [values["city"], values["name"]]).fetchone()[0]
 
 
-@pytest.mark.parametrize("path", ["/tutors", "/videos", "/videos/new", "/coordinators",
+@pytest.mark.parametrize("path", ["/tutors", "/tutors/profile", "/videos", "/videos/new", "/coordinators",
     "/coordinators/new", "/videos/1/report.xlsx"])
 def test_video_and_coordinator_pages_require_auth(settings, path):
     assert create_app(settings).test_client().get(path, base_url="https://localhost").status_code == 302
@@ -134,21 +135,40 @@ def test_teacher_report_links_modules_and_counts_videos(settings, lesson):
                       base_url="https://localhost").status_code == 200
 
 
-def test_teacher_name_links_to_telegram_after_username_is_saved(settings, lesson):
-    run(settings, [lesson])
+def test_teacher_profile_shows_lessons_and_allows_telegram_edit(settings, lesson):
+    run(settings, [lesson, replace(lesson, stable_id="2", topic="Тема 2", date="2026-10-02")])
+    coordinator_id = add_coordinator(settings)
     client = create_app(settings).test_client()
     login(client, settings.password)
-    edit_url = "/tutors/telegram?city=Москва&teacher=Учитель+1"
-    page = client.get(edit_url, base_url="https://localhost")
+    video_response = client.post("/videos/new", base_url="https://localhost", data={
+        "csrf_token": csrf(client), "city": "Москва", "teacher": "Учитель 1",
+        "request_date": "2026-10-03", "sent_date": "2026-10-04", "module": "Kids",
+        "video_url": "https://video.example.test/tutor", "coordinator_id": str(coordinator_id),
+        "positive_notes": "Удачная практика", "growth_notes": "Добавить рефлексию",
+    })
+    assert video_response.status_code == 302
+    listing = BeautifulSoup(client.get("/tutors", base_url="https://localhost").data, "html.parser")
+    profile_link = listing.select_one('a[href^="/tutors/profile?"]')
+    assert profile_link is not None and profile_link.get_text(strip=True) == "Учитель 1"
+    profile_url = profile_link["href"].replace("&amp;", "&")
+    page = client.get(profile_url, base_url="https://localhost")
+    assert page.status_code == 200
+    profile = BeautifulSoup(page.data, "html.parser")
+    topics = [cell.get_text(strip=True) for cell in profile.select(".table-scroll tbody tr td:nth-child(3)")]
+    assert "Тема 1" in topics and "Тема 2" in topics
+    assert "Москва" in page.get_data(as_text=True)
+    assert "name=\"telegram_username\"" in page.get_data(as_text=True)
+    assert "Удачная практика" in page.get_data(as_text=True)
+    assert "Добавить рефлексию" in page.get_data(as_text=True)
+    assert "Открыть видео" in page.get_data(as_text=True)
     csrf_token = re.search(r'name="csrf_token" value="([^"]+)"', page.get_data(as_text=True))[1]
-    response = client.post(edit_url, base_url="https://localhost", data={
+    response = client.post(profile_url, base_url="https://localhost", data={
         "csrf_token": csrf_token, "city": "Москва", "teacher": "Учитель 1",
         "telegram_username": "teacher_example",
     })
     assert response.status_code == 302
-    listing = client.get("/tutors", base_url="https://localhost").get_data(as_text=True)
-    assert '<a href="https://telegram.me/teacher_example" target="_blank"' in listing
-    assert ">Учитель 1</a>" in listing
+    profile = client.get(profile_url, base_url="https://localhost").get_data(as_text=True)
+    assert '<a href="https://telegram.me/teacher_example" target="_blank"' in profile
 
 
 def test_teacher_report_is_sorted_by_city_and_filterable_by_course(settings, lesson):

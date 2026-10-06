@@ -89,7 +89,7 @@ def create_app(settings=None):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; style-src 'self'; script-src 'none'; img-src 'self'; "
+            "default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self'; "
             "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
         )
         if settings.production:
@@ -243,38 +243,47 @@ def create_app(settings=None):
         return render_template("tutors.html", title="Преподаватели", teachers=teachers,
                                modules=MODULES, course_filter=course_filter)
 
-    @app.route("/tutors/telegram", methods=["GET", "POST"])
-    def tutor_telegram_edit():
-        values = {
-            "city": request.values.get("city", "").strip(),
-            "teacher": request.values.get("teacher", "").strip(),
-            "telegram_username": "",
-        }
+    @app.route("/tutors/profile", methods=["GET", "POST"])
+    def tutor_profile():
+        fields = request.form if request.method == "POST" else request.args
+        values = {"city": fields.get("city", "").strip(), "teacher": fields.get("teacher", "").strip(),
+                  "telegram_username": ""}
         if not values["city"] or len(values["city"]) > 200 or not values["teacher"] or len(values["teacher"]) > 200:
             abort(400, "Invalid teacher")
-        course_filter = request.values.get("module", "").strip()
-        if course_filter and course_filter not in MODULES:
-            abort(400, "Unknown course")
         with connection(settings.db_path) as db:
             current = db.execute("""SELECT telegram_username FROM tutor_contacts
                 WHERE city=? AND teacher=?""", [values["city"], values["teacher"]]).fetchone()
-        if current:
-            values["telegram_username"] = current["telegram_username"]
+            lessons = [dict(row) for row in db.execute("""SELECT module,topic,city,teacher,group_name,date
+                FROM lessons WHERE city=? AND teacher=?
+                ORDER BY date DESC,module COLLATE NOCASE,topic COLLATE NOCASE""",
+                [values["city"], values["teacher"]])]
+            videos = [dict(row) for row in db.execute("""SELECT v.*,c.name AS coordinator_name
+                FROM videos v LEFT JOIN coordinators c ON c.id=v.coordinator_id
+                WHERE v.city=? AND v.teacher=?
+                ORDER BY v.request_date DESC,v.id DESC""", [values["city"], values["teacher"]])]
+        if not lessons and not videos:
+            abort(404)
+        values["telegram_username"] = current["telegram_username"] if current else ""
+        values["telegram_input"] = values["telegram_username"]
+        module_order = {name: index for index, name in enumerate(MODULES)}
+        modules = sorted({row["module"] for row in lessons + videos},
+                         key=lambda name: module_order.get(name, 99))
         error = None
         if request.method == "POST":
+            values["telegram_input"] = request.form.get("telegram_username", "").strip().removeprefix("@")
             try:
-                values["telegram_username"] = normalize_telegram_username(
-                    request.form.get("telegram_username", ""))
+                values["telegram_username"] = normalize_telegram_username(values["telegram_input"])
+                values["telegram_input"] = values["telegram_username"]
                 with connection(settings.db_path) as db:
                     db.execute("""INSERT INTO tutor_contacts(city,teacher,telegram_username)
                         VALUES(:city,:teacher,:telegram_username)
                         ON CONFLICT(city,teacher) DO UPDATE SET telegram_username=excluded.telegram_username""",
                         values)
-                return redirect(url_for("tutors", module=course_filter or None))
+                return redirect(url_for("tutor_profile", city=values["city"], teacher=values["teacher"]))
             except ValueError as exception:
                 error = str(exception)
-        return render_template("tutor_telegram_form.html", title="Telegram преподавателя",
-                               tutor=values, course_filter=course_filter, error=error), 400 if error else 200
+        return render_template("tutor_profile.html", title=values["teacher"], tutor=values,
+                               modules=modules, lessons=lessons, videos=videos, error=error)
 
     def coordinator_form_values():
         values = {key: request.form.get(key, "").strip() for key in
