@@ -1,5 +1,6 @@
 from dataclasses import replace
 import re
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from bs4 import BeautifulSoup
@@ -155,3 +156,28 @@ def test_lesson_table_uses_consistent_alternating_week_colors(settings, lesson):
     assert bands[1] == bands[2]
     week_band = app.jinja_env.filters["week_band"]
     assert week_band("2026-12-28") != week_band("2027-01-04")
+
+
+def test_numbered_pagination_keeps_filters_and_shows_nearby_pages(settings, lesson):
+    lessons = [replace(lesson, stable_id=f"page-{number}", topic=f"Занятие {number}")
+               for number in range(120)]
+    run(settings, lessons)
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+
+    response = client.get(
+        "/cities?teacher=Учитель+1&start=2026-09-01&per_page=10&page=6",
+        base_url="https://localhost",
+    )
+    pagination = BeautifulSoup(response.data, "html.parser").select_one("nav.pagination")
+    assert pagination is not None
+    page_items = pagination.select(".page-number")
+    assert [item.get_text(strip=True) for item in page_items] == ["1", "4", "5", "6", "7", "8", "12"]
+    assert pagination.select_one('[aria-current="page"]').get_text(strip=True) == "6"
+    assert len(pagination.select(".pagination-ellipsis")) == 2
+    for item in page_items:
+        if item.name == "a":
+            params = parse_qs(urlsplit(item["href"]).query)
+            assert params["teacher"] == ["Учитель 1"]
+            assert params["start"] == ["2026-09-01"]
+            assert params["per_page"] == ["10"]

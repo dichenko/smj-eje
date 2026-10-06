@@ -14,9 +14,18 @@
 </form>
 </section>
 <section class="card">{% include 'table.html' %}</section>
-<div class="pagination">
+<nav class="pagination" aria-label="Страницы отчёта">
   {% if page > 1 %}<a class="button secondary" href="{{ links.prev }}">← Назад</a>{% endif %}
-  <span>Страница {{ page }} из {{ pages }}</span>
+  <div class="page-numbers">
+    {% set previous_number = namespace(value=0) %}
+    {% for number, href in links.pages.items() %}
+      {% if previous_number.value and number - previous_number.value > 1 %}<span class="pagination-ellipsis" aria-hidden="true">…</span>{% endif %}
+      {% if number == page %}<span class="page-number current" aria-current="page">{{ number }}</span>
+      {% else %}<a class="page-number" href="{{ href }}" aria-label="Страница {{ number }}">{{ number }}</a>{% endif %}
+      {% set previous_number.value = number %}
+    {% endfor %}
+  </div>
+  <span class="pagination-status">Страница {{ page }} из {{ pages }}</span>
   {% if page < pages %}<a class="button secondary" href="{{ links.next }}">Далее →</a>{% endif %}
-</div>
+</nav>
 {% endblock %}

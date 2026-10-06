@@ -186,6 +186,11 @@ def create_app(settings=None):
         pages = max(1, (total + per_page - 1) // per_page)
         links = {"prev": url_for(request.endpoint, **{**request.args.to_dict(), "page": page - 1}),
                  "next": url_for(request.endpoint, **{**request.args.to_dict(), "page": page + 1})}
+        page_numbers = sorted({1, pages, *range(max(1, page - 2), min(pages, page + 2) + 1)})
+        links["pages"] = {
+            number: url_for(request.endpoint, **{**request.args.to_dict(), "page": number})
+            for number in page_numbers
+        }
         return render_template("report.html", title=title, selected=selected, lessons=lessons,
                                total=total, page=page, pages=pages, per_page=per_page,
                                cities=cities, teachers=teachers, groups=groups, links=links,
