@@ -1,6 +1,8 @@
 from dataclasses import replace
 from io import BytesIO
 import re
+from datetime import datetime
+from urllib.parse import parse_qs, urlparse
 import zipfile
 import xml.etree.ElementTree as ET
 
@@ -98,6 +100,39 @@ def test_teacher_report_links_modules_and_counts_videos(settings, lesson):
                       base_url="https://localhost").get_data(as_text=True).count("Скачать Excel") == 2
     assert client.get("/kids?city=Москва&teacher=Учитель 1",
                       base_url="https://localhost").status_code == 200
+
+
+def test_teacher_report_is_sorted_by_city_and_filterable_by_course(settings, lesson):
+    run(settings, [
+        replace(lesson, city="Ярославль", teacher="Яков", module="Kids"),
+        replace(lesson, city="Витебск", teacher="Анна", module="Matata"),
+    ])
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+    all_teachers = client.get("/tutors", base_url="https://localhost").get_data(as_text=True)
+    assert all_teachers.index("Витебск") < all_teachers.index("Ярославль")
+    kids = client.get("/tutors?module=Kids", base_url="https://localhost").get_data(as_text=True)
+    assert "Яков" in kids and "Анна" not in kids
+    matata = client.get("/tutors?module=Matata", base_url="https://localhost").get_data(as_text=True)
+    assert "Анна" in matata and "Яков" not in matata
+    assert client.get("/tutors?module=Unknown", base_url="https://localhost").status_code == 400
+
+
+def test_teacher_video_filter_offers_prefilled_add_form(settings):
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+    listing = client.get("/videos?city=Биробиджан&teacher=Лев+Поляк",
+                         base_url="https://localhost").get_data(as_text=True)
+    links = re.findall(r'href="([^"]+)"[^>]*>Добавить видео</a>', listing)
+    href = next((link for link in links if "city=" in link), None)
+    assert href
+    params = parse_qs(urlparse(href.replace("&amp;", "&")).query)
+    assert params == {"city": ["Биробиджан"], "teacher": ["Лев Поляк"]}
+    form = client.get(href.replace("&amp;", "&"), base_url="https://localhost")
+    html = form.get_data(as_text=True)
+    assert 'name="city" value="Биробиджан"' in html
+    assert 'name="teacher" value="Лев Поляк"' in html
+    assert f'name="request_date" value="{datetime.now(settings.timezone).date().isoformat()}"' in html
 
 
 def test_video_excel_contains_reference_fields_and_safe_text(settings):

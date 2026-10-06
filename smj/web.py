@@ -190,6 +190,9 @@ def create_app(settings=None):
 
     @app.get("/tutors")
     def tutors():
+        course_filter = request.args.get("module", "").strip()
+        if course_filter and course_filter not in MODULES:
+            abort(400, "Unknown course")
         with connection(settings.db_path) as db:
             teacher_map = {}
             for row in db.execute("SELECT DISTINCT city,teacher,module FROM lessons"):
@@ -211,7 +214,10 @@ def create_app(settings=None):
         module_order = {name: index for index, name in enumerate(MODULES)}
         for teacher in teachers:
             teacher["modules"] = sorted(teacher["modules"], key=lambda name: module_order.get(name, 99))
-        return render_template("tutors.html", title="Преподаватели", teachers=teachers)
+        if course_filter:
+            teachers = [teacher for teacher in teachers if course_filter in teacher["modules"]]
+        return render_template("tutors.html", title="Преподаватели", teachers=teachers,
+                               modules=MODULES, course_filter=course_filter)
 
     def coordinator_form_values():
         values = {key: request.form.get(key, "").strip() for key in
@@ -379,6 +385,8 @@ def create_app(settings=None):
     def video_new():
         values = {key: "" for key in ("city", "teacher", "request_date", "sent_date", "module",
                                       "video_url", "positive_notes", "growth_notes", "coordinator_id")}
+        values["city"] = request.args.get("city", "").strip()[:200]
+        values["teacher"] = request.args.get("teacher", "").strip()[:200]
         values["request_date"] = utc_now().astimezone(settings.timezone).date().isoformat()
         values["module"] = next(iter(MODULES))
         error = None

@@ -5,7 +5,7 @@
 <form class="filters video-filters" method="get">
   <label>Город<input name="city" value="{{ city_filter }}" list="video-cities"><datalist id="video-cities">{% for city in cities %}<option value="{{ city }}">{% endfor %}</datalist></label>
   <label>Преподаватель<input name="teacher" value="{{ teacher_filter }}" list="video-teachers"><datalist id="video-teachers">{% for teacher in teachers %}<option value="{{ teacher }}">{% endfor %}</datalist></label>
-  <div class="filter-actions"><button type="submit">Показать</button><a class="quiet" href="{{ url_for('videos') }}">Сбросить</a></div>
+  <div class="filter-actions"><button type="submit">Показать</button><a class="quiet" href="{{ url_for('videos') }}">Сбросить</a>{% if teacher_filter %}<a class="button" href="{{ url_for('video_new', city=city_filter, teacher=teacher_filter) }}">Добавить видео</a>{% endif %}</div>
 </form>
 </section>
 <section class="card table-scroll">

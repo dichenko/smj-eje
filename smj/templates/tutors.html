@@ -1,15 +1,21 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="page-heading"><div><p class="eyebrow">КОМАНДА</p><h1>Преподаватели</h1><p class="muted">Модули ведения связаны с обычными отчетами по занятиям.</p></div><div class="total"><strong>{{ teachers|length }}</strong><span>преподавателей</span></div></div>
+<div class="page-heading"><div><p class="eyebrow">КОМАНДА</p><h1>Преподаватели</h1><p class="muted">Список отсортирован по городу. Нажмите на курс, чтобы открыть занятия.</p></div><div class="total"><strong>{{ teachers|length }}</strong><span>преподавателей</span></div></div>
+<section class="card">
+<form class="filters tutor-filters" method="get">
+  <label>Курс<select name="module"><option value="">Все курсы</option>{% for module in modules %}<option value="{{ module }}" {% if course_filter == module %}selected{% endif %}>{{ module }}</option>{% endfor %}</select></label>
+  <div class="filter-actions"><button type="submit">Показать</button><a class="quiet" href="{{ url_for('tutors') }}">Сбросить</a></div>
+</form>
+</section>
 <section class="card table-scroll">
 <table>
-  <thead><tr><th>Преподаватель</th><th>Город</th><th>Модули</th><th>Видео</th></tr></thead>
+  <thead><tr><th>Город (А–Я)</th><th>Преподаватель</th><th>Курсы</th><th>Видео</th></tr></thead>
   <tbody>{% for teacher in teachers %}<tr>
-    <td><strong>{{ teacher.teacher }}</strong></td>
     <td>{{ teacher.city }}</td>
+    <td><strong>{{ teacher.teacher }}</strong></td>
     <td>{% for module in teacher.modules %}<a class="badge module-link {{ module.lower() }}" href="{{ url_for(module.lower(), city=teacher.city, teacher=teacher.teacher) }}">{{ module }}</a>{% else %}<span class="muted">Нет занятий</span>{% endfor %}</td>
     <td><a class="count-link" href="{{ url_for('videos', city=teacher.city, teacher=teacher.teacher) }}">{{ teacher.video_count }}</a></td>
-  </tr>{% else %}<tr><td class="empty" colspan="4">Преподаватели появятся после загрузки занятий.</td></tr>{% endfor %}</tbody>
+  </tr>{% else %}<tr><td class="empty" colspan="4">{% if course_filter %}Нет преподавателей по курсу {{ course_filter }}.{% else %}Преподаватели появятся после загрузки занятий.{% endif %}</td></tr>{% endfor %}</tbody>
 </table>
 </section>
 {% endblock %}
