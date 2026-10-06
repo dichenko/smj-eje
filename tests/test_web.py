@@ -125,6 +125,16 @@ def test_public_health_discloses_no_data_and_is_blocked(app):
     assert response.status_code == 404
 
 
+def test_svg_favicon_is_linked_and_served(app, settings):
+    client = app.test_client()
+    login(client, settings.password)
+    page = client.get("/tutors", base_url="https://localhost").get_data(as_text=True)
+    assert 'rel="icon" type="image/svg+xml" href="/static/favicon.svg"' in page
+    icon = client.get("/static/favicon.svg", base_url="https://localhost")
+    assert icon.status_code == 200
+    assert b">S</text>" in icon.data and b">J</text>" in icon.data
+
+
 def test_non_ascii_csrf_rejected_without_server_error(app):
     client = app.test_client()
     token(client)
