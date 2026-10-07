@@ -162,6 +162,10 @@ def test_teacher_profile_shows_lessons_and_allows_telegram_edit(settings, lesson
     assert "Удачная практика" in page.get_data(as_text=True)
     assert "Добавить рефлексию" in page.get_data(as_text=True)
     assert "Открыть видео" in page.get_data(as_text=True)
+    assert profile.find("a", string="Редактировать")["href"] == "/videos/1/edit"
+    delete = profile.find("a", string="Удалить")
+    assert urlparse(delete["href"]).path == "/videos/1/delete"
+    assert parse_qs(urlparse(delete["href"]).query) == {"city": ["Москва"], "teacher": ["Учитель 1"]}
     csrf_token = re.search(r'name="csrf_token" value="([^"]+)"', page.get_data(as_text=True))[1]
     response = client.post(profile_url, base_url="https://localhost", data={
         "csrf_token": csrf_token, "city": "Москва", "teacher": "Учитель 1",
@@ -170,6 +174,39 @@ def test_teacher_profile_shows_lessons_and_allows_telegram_edit(settings, lesson
     assert response.status_code == 302
     profile = client.get(profile_url, base_url="https://localhost").get_data(as_text=True)
     assert '<a href="https://telegram.me/teacher_example" target="_blank"' in profile
+
+
+def test_tutor_telegram_is_below_video_count_and_absent_without_username(settings, lesson):
+    run(settings, [lesson, replace(lesson, stable_id="2", teacher="Учитель 2")])
+    with connection(settings.db_path) as db:
+        db.execute("INSERT INTO tutor_contacts(city,teacher,telegram_username) VALUES(?,?,?)",
+                   [lesson.city, lesson.teacher, "teacher_example"])
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+    page = BeautifulSoup(client.get("/tutors", base_url="https://localhost").data, "html.parser")
+    cell = page.select_one('[data-name="Учитель 1"] td:nth-child(4)')
+    links = cell.select("a")
+    assert links[0].has_attr("class") and "count-link" in links[0]["class"]
+    assert links[1]["href"] == "https://telegram.me/teacher_example"
+    assert "small-link" in links[1]["class"]
+    assert links[1].get_text(strip=True) == "@teacher_example"
+    empty = page.select_one('[data-name="Учитель 2"] td:nth-child(4)')
+    assert len(empty.select("a")) == 1 and empty.get_text(strip=True) == "0"
+
+
+def test_coordinator_search_exposes_city_and_name_without_unescaped_html(settings):
+    add_coordinator(settings, name='Анна <script>alert("x")</script>')
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+    response = client.get("/coordinators", base_url="https://localhost")
+    page = BeautifulSoup(response.data, "html.parser")
+    assert page.select_one('#coordinator-search[type="search"]')
+    row = page.select_one("#coordinators-table [data-coordinator-row]")
+    assert row["data-city"] == "Москва"
+    assert row["data-name"] == 'Анна <script>alert("x")</script>'
+    assert not row.find("script")
+    assert page.select_one("[data-coordinator-no-results]").has_attr("hidden")
+    assert page.select_one('script[src="/static/directory-search.js"]')
 
 
 def test_teacher_report_is_sorted_by_city_and_filterable_by_course(settings, lesson):
@@ -296,6 +333,9 @@ def test_video_form_only_offers_modules_from_teacher_lessons(settings, lesson):
     options = {option["data-teacher"]: json.loads(option["data-modules"])
                for option in form.select("#video-teachers option")}
     assert options == {"Учитель 1": ["Kids", "Junior"], "Другой преподаватель": ["Matata"]}
+    # Restrict the form's module field while keeping the global navigation complete.
+    assert form.select_one('nav a[href="/matata"]')
+    assert form.select_one('nav a[href="/userbasic"]')
 
 
 def test_video_modules_are_scoped_to_teacher_city(settings, lesson):

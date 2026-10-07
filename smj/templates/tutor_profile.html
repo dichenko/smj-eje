@@ -27,7 +27,7 @@
   <h2>Видео занятий</h2>
   {% if videos %}
   <div class="table-scroll"><table>
-    <thead><tr><th>Дата запроса</th><th>Дата отправки</th><th>Курс</th><th>Координатор</th><th>Видео и отчет</th><th>Отчет методиста</th></tr></thead>
+    <thead><tr><th>Дата запроса</th><th>Дата отправки</th><th>Курс</th><th>Координатор</th><th>Видео и отчет</th><th>Отчет методиста</th><th>Действия</th></tr></thead>
     <tbody>{% for video in videos %}<tr>
       <td class="nowrap">{{ video.request_date[8:10] }}.{{ video.request_date[5:7] }}.{{ video.request_date[:4] }}</td>
       <td class="nowrap">{% if video.sent_date %}{{ video.sent_date[8:10] }}.{{ video.sent_date[5:7] }}.{{ video.sent_date[:4] }}{% else %}—{% endif %}</td>
@@ -35,6 +35,7 @@
       <td>{{ video.coordinator_name or '—' }}</td>
       <td>{% if video.video_url %}<a href="{{ video.video_url }}" target="_blank" rel="noopener noreferrer">Открыть видео</a><br>{% endif %}<a href="{{ url_for('video_excel_report', video_id=video.id) }}">Скачать Excel</a></td>
       <td class="preserve-lines">{% if video.positive_notes %}<strong>Хорошо:</strong> {{ video.positive_notes }}<br>{% endif %}{% if video.growth_notes %}<strong>Зона роста:</strong> {{ video.growth_notes }}{% endif %}{% if not video.positive_notes and not video.growth_notes %}—{% endif %}</td>
+      <td><div class="video-actions"><a class="quiet" href="{{ url_for('video_edit', video_id=video.id) }}">Редактировать</a><a class="quiet danger" href="{{ url_for('video_delete', video_id=video.id, city=tutor.city, teacher=tutor.teacher) }}">Удалить</a></div></td>
     </tr>{% endfor %}</tbody>
   </table></div>
   {% else %}<p class="muted">Для преподавателя пока нет видео.</p>{% endif %}

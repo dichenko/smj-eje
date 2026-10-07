@@ -151,6 +151,24 @@ def test_tutor_search_is_realtime_and_scripts_are_allowed_from_static(app, setti
     assert b"word.startsWith(term)" in script.data
 
 
+def test_city_search_choices_include_teachers_for_switching_cities(settings, lesson):
+    run(settings, [lesson, replace(lesson, stable_id="2", city="Минск", teacher="Анна Иванова")])
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+    response = client.get("/cities?city=Москва&teacher=Учитель+1", base_url="https://localhost")
+    page = BeautifulSoup(response.data, "html.parser")
+    assert page.select_one('input[name="city"][type="search"]')["value"] == "Москва"
+    assert page.select_one('input[name="teacher"][type="search"]')["value"] == "Учитель 1"
+    choices = {(option["value"], option["data-city"]) for option in page.select("#teacher-search-options option")}
+    assert choices == {("Учитель 1", "Москва"), ("Анна Иванова", "Минск")}
+    assert page.select_one('script[src="/static/directory-search.js"]')
+    filtered = client.get("/cities?city=Минск&teacher=Анна+Иванова", base_url="https://localhost")
+    rows = BeautifulSoup(filtered.data, "html.parser").select(".table-scroll tbody tr")
+    assert len(rows) == 1 and "Анна Иванова" in rows[0].get_text()
+    other_report = BeautifulSoup(client.get("/kids", base_url="https://localhost").data, "html.parser")
+    assert other_report.select_one('select[name="city"]')
+
+
 def test_non_ascii_csrf_rejected_without_server_error(app):
     client = app.test_client()
     token(client)

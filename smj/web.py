@@ -191,6 +191,9 @@ def create_app(settings=None):
             cities = distinct_values(db, "city")
             teachers = distinct_values(db, "teacher", selected["city"])
             groups = distinct_values(db, "group_name", selected["city"])
+            teacher_choices = [dict(row) for row in db.execute(
+                "SELECT DISTINCT city,teacher FROM lessons ORDER BY teacher,city")
+            ] if request.endpoint == "cities" else []
         pages = max(1, (total + per_page - 1) // per_page)
         links = {"prev": url_for(request.endpoint, **{**request.args.to_dict(), "page": page - 1}),
                  "next": url_for(request.endpoint, **{**request.args.to_dict(), "page": page + 1})}
@@ -202,7 +205,7 @@ def create_app(settings=None):
         return render_template("report.html", title=title, selected=selected, lessons=lessons,
                                total=total, page=page, pages=pages, per_page=per_page,
                                cities=cities, teachers=teachers, groups=groups, links=links,
-                               locked_module=module)
+                               locked_module=module, teacher_choices=teacher_choices)
 
     @app.get("/lessons")
     def lessons():
@@ -518,7 +521,7 @@ def create_app(settings=None):
         return render_template("video_form.html", title="Видео преподавателя" if video_id else "Добавить видео",
                                video=values, teachers=teachers, cities=cities,
                                teacher_options=teacher_options, teacher_input=teacher_input,
-                               modules=available,
+                               video_modules=available,
                                automatic_city=values.get("teacher") in teacher_cities,
                                coordinators=coordinator_rows, error=error, video_id=video_id), 400 if error else 200
 

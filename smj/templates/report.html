@@ -4,8 +4,13 @@
 <section class="card">
 <form class="filters" method="get">
   <label>Модуль<select name="module" {% if locked_module %}disabled{% endif %}><option value="">Все модули</option>{% for module in modules %}<option value="{{ module }}" {% if selected.module == module %}selected{% endif %}>{{ module }}</option>{% endfor %}</select></label>
+  {% if request.endpoint == 'cities' %}
+  <label>Город<input type="search" name="city" value="{{ selected.city }}" list="city-search-options" maxlength="200" autocomplete="off" placeholder="Все города" aria-describedby="city-search-hint"><datalist id="city-search-options">{% for city in cities %}<option value="{{ city }}">{% endfor %}</datalist><span class="field-hint" id="city-search-hint" aria-live="polite">Начните вводить название города.</span></label>
+  <label>Преподаватель<input type="search" name="teacher" value="{{ selected.teacher }}" list="teacher-search-options" maxlength="200" autocomplete="off" placeholder="Все преподаватели" aria-describedby="teacher-search-hint"><datalist id="teacher-search-options">{% for choice in teacher_choices %}<option value="{{ choice.teacher }}" data-city="{{ choice.city }}">{% endfor %}</datalist><span class="field-hint" id="teacher-search-hint" aria-live="polite">Начните вводить имя или фамилию.</span></label>
+  {% else %}
   <label>Город<select name="city"><option value="">Все города</option>{% for city in cities %}<option value="{{ city }}" {% if selected.city == city %}selected{% endif %}>{{ city }}</option>{% endfor %}</select></label>
   <label>Преподаватель<select name="teacher"><option value="">Все преподаватели</option>{% for teacher in teachers %}<option value="{{ teacher }}" {% if selected.teacher == teacher %}selected{% endif %}>{{ teacher }}</option>{% endfor %}</select></label>
+  {% endif %}
   <label>Группа<select name="group_name"><option value="">Все группы</option>{% for group in groups %}<option value="{{ group }}" {% if selected.group_name == group %}selected{% endif %}>{{ group }}</option>{% endfor %}</select></label>
   <label>С даты<input type="date" name="start" value="{{ selected.start }}" min="{{ data_start }}"></label>
   <label>По дату<input type="date" name="end" value="{{ selected.end }}" min="{{ data_start }}"></label>
@@ -29,3 +34,4 @@
   {% if page < pages %}<a class="button secondary" href="{{ links.next }}">Далее →</a>{% endif %}
 </nav>
 {% endblock %}
+{% block scripts %}{% if request.endpoint == 'cities' %}<script defer src="{{ url_for('static', filename='directory-search.js') }}"></script>{% endif %}{% endblock %}

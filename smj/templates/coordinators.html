@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="page-heading"><div><p class="eyebrow">СПРАВОЧНИК</p><h1>Координаторы</h1><p class="muted">Контакты можно изменить в любой момент.</p></div><a class="button" href="{{ url_for('coordinator_new') }}">Добавить координатора</a></div>
+<section class="card"><label class="directory-search">Поиск по городу или ФИО<input id="coordinator-search" type="search" autocomplete="off" placeholder="Начните вводить город, имя или фамилию" aria-controls="coordinators-table"><span class="field-hint" id="coordinator-search-status" aria-live="polite">Список обновляется сразу по первым буквам.</span></label></section>
 <section class="card table-scroll">
-<table>
+<table id="coordinators-table">
   <thead><tr><th>Город</th><th>ФИО</th><th>Telegram</th><th>Контакт</th><th>Личная почта</th><th>Корпоративная почта</th><th>Дата рождения</th><th></th></tr></thead>
-  <tbody>{% for coordinator in coordinators %}<tr>
+  <tbody>{% for coordinator in coordinators %}<tr data-coordinator-row data-city="{{ coordinator.city }}" data-name="{{ coordinator.name }}">
     <td>{{ coordinator.city }}</td><td><strong>{{ coordinator.name }}</strong></td>
     <td>{% if coordinator.telegram_username %}<a href="https://telegram.me/{{ coordinator.telegram_username }}" target="_blank" rel="noopener noreferrer">@{{ coordinator.telegram_username }}</a>{% else %}—{% endif %}</td>
     <td class="preserve-lines">{{ coordinator.phone or '—' }}</td>
@@ -12,7 +13,8 @@
     <td class="preserve-lines">{{ coordinator.corporate_email or '—' }}</td>
     <td class="nowrap">{% if coordinator.birth_date %}{{ coordinator.birth_date[8:10] }}.{{ coordinator.birth_date[5:7] }}.{{ coordinator.birth_date[:4] }}{% else %}—{% endif %}</td>
     <td><a class="quiet" href="{{ url_for('coordinator_edit', coordinator_id=coordinator.id) }}">Редактировать</a></td>
-  </tr>{% else %}<tr><td class="empty" colspan="8">Координаторов пока нет.</td></tr>{% endfor %}</tbody>
+  </tr>{% else %}<tr><td class="empty" colspan="8">Координаторов пока нет.</td></tr>{% endfor %}<tr data-coordinator-no-results hidden><td class="empty" colspan="8">Подходящих координаторов не найдено.</td></tr></tbody>
 </table>
 </section>
 {% endblock %}
+{% block scripts %}<script defer src="{{ url_for('static', filename='directory-search.js') }}"></script>{% endblock %}
