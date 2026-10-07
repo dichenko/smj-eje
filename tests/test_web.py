@@ -6,6 +6,7 @@ import pytest
 from bs4 import BeautifulSoup
 
 from smj.web import create_app
+from smj.db import connection
 from test_sync import run
 
 
@@ -167,6 +168,35 @@ def test_city_search_choices_include_teachers_for_switching_cities(settings, les
     assert len(rows) == 1 and "Анна Иванова" in rows[0].get_text()
     other_report = BeautifulSoup(client.get("/kids", base_url="https://localhost").data, "html.parser")
     assert other_report.select_one('select[name="city"]')
+
+
+def test_city_report_teacher_links_and_icons_use_each_rows_city(settings, lesson):
+    run(settings, [replace(lesson, city="Томск"), replace(lesson, stable_id="2"),
+                   replace(lesson, stable_id="3", city="Томск", teacher="Учитель 2")])
+    with connection(settings.db_path) as db:
+        db.executemany("INSERT INTO tutor_contacts(city,teacher,telegram_username) VALUES(?,?,?)", [
+            ("Томск", "Учитель 1", "tomsk_teacher"), ("Москва", "Учитель 1", "moscow_teacher")])
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+    for city in ("", "Томск"):
+        page = BeautifulSoup(client.get("/cities", query_string={"city": city},
+                                       base_url="https://localhost").data, "html.parser")
+        rows = page.select(".table-scroll tbody tr")
+        assert len(rows) == (2 if city else 3)
+        for row in rows:
+            cells = row.find_all("td", recursive=False)
+            row_city = cells[3].get_text(strip=True)
+            link = cells[4].find("a")
+            assert link and urlsplit(link["href"]).path == "/tutors/profile"
+            assert parse_qs(urlsplit(link["href"]).query) == {
+                "city": [row_city], "teacher": [link.get_text(strip=True)]}
+            assert client.get(link["href"], base_url="https://localhost").status_code == 200
+            icon = cells[4].select_one(".tutor-telegram-icon")
+            if link.get_text(strip=True) == "Учитель 1":
+                assert icon and icon["title"] == ("@tomsk_teacher" if row_city == "Томск" else "@moscow_teacher")
+                assert not icon.find_parent("a")
+            else:
+                assert icon is None
 
 
 def test_non_ascii_csrf_rejected_without_server_error(app):

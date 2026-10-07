@@ -194,6 +194,9 @@ def create_app(settings=None):
             teacher_choices = [dict(row) for row in db.execute(
                 "SELECT DISTINCT city,teacher FROM lessons ORDER BY teacher,city")
             ] if request.endpoint == "cities" else []
+            teacher_usernames = {(row["city"], row["teacher"]): row["telegram_username"]
+                                for row in db.execute("SELECT city,teacher,telegram_username FROM tutor_contacts")
+                                } if request.endpoint == "cities" else {}
         pages = max(1, (total + per_page - 1) // per_page)
         links = {"prev": url_for(request.endpoint, **{**request.args.to_dict(), "page": page - 1}),
                  "next": url_for(request.endpoint, **{**request.args.to_dict(), "page": page + 1})}
@@ -205,7 +208,8 @@ def create_app(settings=None):
         return render_template("report.html", title=title, selected=selected, lessons=lessons,
                                total=total, page=page, pages=pages, per_page=per_page,
                                cities=cities, teachers=teachers, groups=groups, links=links,
-                               locked_module=module, teacher_choices=teacher_choices)
+                               locked_module=module, teacher_choices=teacher_choices,
+                               teacher_usernames=teacher_usernames)
 
     @app.get("/lessons")
     def lessons():

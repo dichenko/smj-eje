@@ -1,10 +1,11 @@
+{% from 'telegram_icon.html' import telegram_icon %}
 <div class="table-scroll">
 <table>
   <thead><tr><th>Дата</th><th>Модуль</th><th>Тема</th><th>Город</th><th>Преподаватель</th><th>Группа</th></tr></thead>
   <tbody>{% for lesson in lessons %}<tr class="week-band-{{ lesson.date|week_band }}">
     <td class="nowrap">{{ lesson.date[8:10] }}.{{ lesson.date[5:7] }}.{{ lesson.date[:4] }}</td>
     <td><span class="badge {{ lesson.module.lower() }}">{{ lesson.module }}</span></td>
-    <td>{{ lesson.topic }}</td><td>{{ lesson.city }}</td><td>{{ lesson.teacher }}</td><td>{{ lesson.group_name or '—' }}</td>
+    <td>{{ lesson.topic }}</td><td>{{ lesson.city }}</td><td>{% if request.endpoint == 'cities' %}<a href="{{ url_for('tutor_profile', city=lesson.city, teacher=lesson.teacher) }}">{{ lesson.teacher }}</a>{{ telegram_icon(teacher_usernames.get((lesson.city, lesson.teacher), '')) }}{% else %}{{ lesson.teacher }}{% endif %}</td><td>{{ lesson.group_name or '—' }}</td>
   </tr>{% else %}<tr><td colspan="6" class="empty">Занятий по выбранным условиям нет.</td></tr>{% endfor %}</tbody>
 </table>
 </div>
