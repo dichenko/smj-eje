@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from 'telegram_icon.html' import telegram_icon %}
 {% block content %}
 <div class="page-heading"><div><p class="eyebrow">КОМАНДА</p><h1>Преподаватели</h1><p class="muted">Список отсортирован по городу. Нажмите на курс, чтобы открыть занятия.</p></div><div class="total"><strong id="tutor-count" aria-live="polite">{{ teachers|length }}</strong><span>преподавателей</span></div></div>
 <section class="card">
@@ -13,7 +14,7 @@
   <thead><tr><th>Город (А–Я)</th><th>Преподаватель</th><th>Курсы</th><th>Видео</th></tr></thead>
   <tbody>{% for teacher in teachers %}<tr data-tutor-row data-name="{{ teacher.teacher }}">
     <td>{{ teacher.city }}</td>
-    <td><strong><a href="{{ url_for('tutor_profile', city=teacher.city, teacher=teacher.teacher) }}">{{ teacher.teacher }}</a></strong>{% if teacher.telegram_username %}&nbsp;<span class="tutor-telegram-icon" role="img" aria-label="Telegram" title="@{{ teacher.telegram_username }}"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="12" fill="#2AABEE"/><path d="M18.4 6.8 16 18c-.2.8-.7 1-1.3.6l-3.7-2.7-1.8 1.7c-.2.2-.3.3-.7.3l.3-3.8 6.9-6.3c.3-.3-.1-.4-.5-.2l-8.5 5.4-3.7-1.2c-.8-.2-.8-.8.2-1.2L17.6 5.2c.7-.3 1.3.2.8 1.6Z" fill="#fff"/></svg></span>{% endif %}</td>
+    <td><strong><a href="{{ url_for('tutor_profile', city=teacher.city, teacher=teacher.teacher) }}">{{ teacher.teacher }}</a></strong>{{ telegram_icon(teacher.telegram_username) }}</td>
     <td>{% for module in teacher.modules %}<a class="badge module-link {{ module.lower() }}" href="{{ url_for(module.lower(), city=teacher.city, teacher=teacher.teacher) }}">{{ module }}</a>{% else %}<span class="muted">Нет занятий</span>{% endfor %}</td>
     <td><a class="count-link" href="{{ url_for('videos', city=teacher.city, teacher=teacher.teacher) }}">{{ teacher.video_count }}</a></td>
   </tr>{% else %}<tr data-empty-list><td class="empty" colspan="4">{% if course_filter %}Нет преподавателей по курсу {{ course_filter }}.{% else %}Преподаватели появятся после загрузки занятий.{% endif %}</td></tr>{% endfor %}

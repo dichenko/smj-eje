@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from 'telegram_icon.html' import telegram_icon %}
 {% block content %}
 <div class="page-heading"><div><p class="eyebrow">НАБЛЮДЕНИЯ ЗАНЯТИЙ</p><h1>Видео</h1><p class="muted">Запросы, ссылки и заметки по каждому просмотру занятия.</p></div><div class="heading-actions"><span class="total"><strong>{{ videos|length }}</strong><span>записей</span></span><a class="button" href="{{ url_for('video_new') }}">Добавить видео</a></div></div>
 <section class="card">
@@ -14,8 +15,8 @@
   <tbody>{% for video in videos %}<tr>
     <td class="nowrap">{{ video.request_date[8:10] }}.{{ video.request_date[5:7] }}.{{ video.request_date[:4] }}</td>
     <td class="nowrap">{% if video.sent_date %}{{ video.sent_date[8:10] }}.{{ video.sent_date[5:7] }}.{{ video.sent_date[:4] }}{% else %}<span class="muted">Не отправлено</span>{% endif %}</td>
-    <td><strong>{{ video.teacher }}</strong></td><td>{{ video.city }}</td><td><span class="badge {{ video.module.lower() }}">{{ video.module }}</span></td>
-    <td>{{ video.coordinator_name or '—' }}</td>
+    <td><strong>{{ video.teacher }}</strong>{{ telegram_icon(video.teacher_telegram_username) }}</td><td>{{ video.city }}</td><td><span class="badge {{ video.module.lower() }}">{{ video.module }}</span></td>
+    <td>{{ video.coordinator_name or '—' }}{{ telegram_icon(video.coordinator_telegram_username) }}</td>
     <td>{% if video.video_url %}<a href="{{ video.video_url }}" target="_blank" rel="noopener noreferrer">Открыть</a>{% else %}—{% endif %}</td>
     <td><a href="{{ url_for('video_excel_report', video_id=video.id) }}">Скачать Excel</a></td>
     <td><div class="video-actions"><a class="quiet" href="{{ url_for('video_edit', video_id=video.id) }}">Изменить</a><a class="quiet danger" href="{{ url_for('video_delete', video_id=video.id, city=city_filter, teacher=teacher_filter) }}">Удалить</a></div></td>

@@ -490,8 +490,11 @@ def create_app(settings=None):
         where = " WHERE " + " AND ".join(clauses) if clauses else ""
         with connection(settings.db_path) as db:
             rows = [dict(row) for row in db.execute("""
-                SELECT v.*, c.name AS coordinator_name FROM videos v
+                SELECT v.*, c.name AS coordinator_name,
+                    c.telegram_username AS coordinator_telegram_username,
+                    tc.telegram_username AS teacher_telegram_username FROM videos v
                 LEFT JOIN coordinators c ON c.id=v.coordinator_id
+                LEFT JOIN tutor_contacts tc ON tc.city=v.city AND tc.teacher=v.teacher
             """ + where + " ORDER BY v.request_date DESC,v.city COLLATE NOCASE,v.teacher COLLATE NOCASE,v.id DESC",
                 params)]
         teachers, cities, _, _ = video_form_choices()

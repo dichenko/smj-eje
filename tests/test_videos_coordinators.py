@@ -423,6 +423,40 @@ def video_delete_client(settings, lesson):
     return client
 
 
+@pytest.mark.parametrize("teacher_username", ["teacher_example", ""])
+@pytest.mark.parametrize("coordinator_username", ["maria_coord", ""])
+def test_video_telegram_icons_match_teacher_city_and_selected_coordinator(
+        settings, video_delete_client, teacher_username, coordinator_username):
+    with connection(settings.db_path) as db:
+        db.execute("INSERT INTO tutor_contacts(city,teacher,telegram_username) VALUES(?,?,?)",
+                   ["Москва", "Учитель 1", teacher_username])
+        # A namesake in another city must neither duplicate videos nor supply this contact.
+        db.execute("INSERT INTO tutor_contacts(city,teacher,telegram_username) VALUES(?,?,?)",
+                   ["Минск", "Учитель 1", "other_city_user"])
+        db.execute("UPDATE coordinators SET telegram_username=?", [coordinator_username])
+    response = video_delete_client.get("/videos?city=Москва&teacher=Учитель+1", base_url="https://localhost")
+    assert response.status_code == 200
+    page = BeautifulSoup(response.data, "html.parser")
+    rows = page.select(".table-scroll tbody tr")
+    assert len(rows) == 2
+    for row in rows:
+        cells = row.find_all("td", recursive=False)
+        for cell, username in ((cells[2], teacher_username), (cells[5], coordinator_username)):
+            icon = cell.select_one(".tutor-telegram-icon")
+            assert (icon is not None) == bool(username)
+            if username:
+                assert icon["title"] == "@" + username and icon.select_one("svg")
+                assert not icon.find_parent("a")
+
+
+def test_video_telegram_icons_absent_for_missing_contacts(settings, video_delete_client):
+    with connection(settings.db_path) as db:
+        db.execute("UPDATE videos SET coordinator_id=NULL")
+    page = BeautifulSoup(video_delete_client.get("/videos", base_url="https://localhost").data, "html.parser")
+    assert not page.select_one(".tutor-telegram-icon")
+    assert len(page.select(".table-scroll tbody tr")) == 2
+
+
 def test_video_delete_links_show_confirmation_and_preserve_cancel_destination(settings, video_delete_client):
     client = video_delete_client
     listing = BeautifulSoup(client.get("/videos?city=Москва&teacher=Учитель+1",
