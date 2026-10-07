@@ -13,7 +13,6 @@
   <a class="brand" href="{{ url_for('weekly') }}">Smart<span>J</span> <small>Отчеты</small></a>
   <nav aria-label="Отчеты">
     <a {% if request.endpoint == 'weekly' %}class="active"{% endif %} href="{{ url_for('weekly') }}">Неделя</a>
-    {% for module in modules %}<a {% if request.endpoint == module.lower() %}class="active"{% endif %} href="{{ url_for(module.lower()) }}">{{ module }}</a>{% endfor %}
     <a {% if request.endpoint == 'cities' %}class="active"{% endif %} href="{{ url_for('cities') }}">Города</a>
     <a {% if request.endpoint in ['tutors','tutor_profile'] %}class="active"{% endif %} href="{{ url_for('tutors') }}">Преподаватели</a>
     <a {% if request.endpoint in ['videos','video_new','video_edit','video_excel_report'] %}class="active"{% endif %} href="{{ url_for('videos') }}">Видео</a>

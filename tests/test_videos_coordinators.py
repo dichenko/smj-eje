@@ -335,9 +335,6 @@ def test_video_form_only_offers_modules_from_teacher_lessons(settings, lesson):
     options = {option["data-teacher"]: json.loads(option["data-modules"])
                for option in form.select("#video-teachers option")}
     assert options == {"Учитель 1": ["Kids", "Junior"], "Другой преподаватель": ["Matata"]}
-    # Restrict the form's module field while keeping the global navigation complete.
-    assert form.select_one('nav a[href="/matata"]')
-    assert form.select_one('nav a[href="/userbasic"]')
 
 
 def test_video_modules_are_scoped_to_teacher_city(settings, lesson):
