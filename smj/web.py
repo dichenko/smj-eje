@@ -393,7 +393,24 @@ def create_app(settings=None):
         elif cities and values.get("city") not in cities:
             values["city"] = ""
 
-    def video_form_values():
+    def video_teacher_modules():
+        with connection(settings.db_path) as db:
+            rows = db.execute("SELECT DISTINCT teacher,city,module FROM lessons").fetchall()
+        result = defaultdict(set)
+        for row in rows:
+            result[(row["teacher"], row["city"])].add(row["module"])
+        return {key: [module for module in MODULES if module in available]
+                for key, available in result.items()}
+
+    def available_video_modules(values, teacher_modules, existing_video=None):
+        available = set(teacher_modules.get((values.get("teacher"), values.get("city")), []))
+        # Keep old observations editable without treating their modules as teaching assignments.
+        if (existing_video and values.get("teacher") == existing_video["teacher"]
+                and values.get("city") == existing_video["city"]):
+            available.add(existing_video["module"])
+        return [module for module in MODULES if module in available]
+
+    def video_form_values(existing_video=None):
         values = {key: request.form.get(key, "").strip() for key in
                   ("city", "teacher", "request_date", "sent_date", "module", "video_url",
                    "positive_notes", "growth_notes", "coordinator_id")}
@@ -413,6 +430,11 @@ def create_app(settings=None):
             raise ValueError("Проверьте даты запроса и отправки.") from exception
         if values["module"] not in MODULES:
             raise ValueError("Выберите модуль из списка.")
+        available = available_video_modules(values, video_teacher_modules(), existing_video)
+        if not available:
+            raise ValueError("У преподавателя пока нет проведённых занятий. Его модули ещё не определены.")
+        if values["module"] not in available:
+            raise ValueError("Выберите модуль, который ведёт этот преподаватель.")
         if len(values["video_url"]) > 2048:
             raise ValueError("Ссылка слишком длинная.")
         if values["video_url"]:
@@ -473,12 +495,18 @@ def create_app(settings=None):
         return render_template("videos.html", title="Видео", videos=rows, city_filter=city_filter,
                                teacher_filter=teacher_filter, teachers=teachers, cities=cities)
 
-    def render_video_form(values, error=None, video_id=None):
+    def render_video_form(values, error=None, video_id=None, existing_video=None):
         teacher_cities = video_teacher_cities()
         resolve_video_teacher(values, teacher_cities)
+        teacher_modules = video_teacher_modules()
+        available = available_video_modules(values, teacher_modules, existing_video)
+        if not error and values.get("module") not in available:
+            values["module"] = available[0] if available else ""
         teacher_options = [
             {"value": name if len(cities) == 1 else f"{name} — {city}",
-             "teacher": name, "city": city}
+             "teacher": name, "city": city,
+             "modules": available_video_modules({"teacher": name, "city": city},
+                                                 teacher_modules, existing_video)}
             for name, cities in teacher_cities.items() for city in cities
         ]
         teacher_input = values.get("teacher", "")
@@ -490,6 +518,7 @@ def create_app(settings=None):
         return render_template("video_form.html", title="Видео преподавателя" if video_id else "Добавить видео",
                                video=values, teachers=teachers, cities=cities,
                                teacher_options=teacher_options, teacher_input=teacher_input,
+                               modules=available,
                                automatic_city=values.get("teacher") in teacher_cities,
                                coordinators=coordinator_rows, error=error, video_id=video_id), 400 if error else 200
 
@@ -500,7 +529,7 @@ def create_app(settings=None):
         values["city"] = request.args.get("city", "").strip()[:200]
         values["teacher"] = request.args.get("teacher", "").strip()[:200]
         values["request_date"] = utc_now().astimezone(settings.timezone).date().isoformat()
-        values["module"] = next(iter(MODULES))
+        values["module"] = ""
         error = None
         if request.method == "POST":
             values = {key: request.form.get(key, "").strip() for key in values}
@@ -535,7 +564,7 @@ def create_app(settings=None):
                            ("city", "teacher", "request_date", "sent_date", "module", "video_url",
                             "positive_notes", "growth_notes", "coordinator_id")})
             try:
-                values = video_form_values()
+                values = video_form_values(current)
                 now = utc_now().isoformat()
                 if values["coordinator_id"] is None:
                     _, _, _, match = video_form_choices(values["city"])
@@ -549,7 +578,7 @@ def create_app(settings=None):
                 return redirect(url_for("videos"))
             except ValueError as exception:
                 error = str(exception)
-        return render_video_form(values, error, video_id)
+        return render_video_form(values, error, video_id, current)
 
     @app.route("/videos/<int:video_id>/delete", methods=["GET", "POST"])
     def video_delete(video_id):

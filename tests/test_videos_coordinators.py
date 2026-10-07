@@ -3,6 +3,7 @@ from io import BytesIO
 import re
 from datetime import datetime
 import sqlite3
+import json
 from urllib.parse import parse_qs, urlparse
 import zipfile
 import xml.etree.ElementTree as ET
@@ -265,12 +266,15 @@ def test_video_ambiguous_teacher_requires_pair_and_never_guesses(settings, lesso
         assert tuple(db.execute("SELECT city,teacher FROM videos").fetchone()) == ("Минск", "Учитель 1")
 
 
-def test_video_city_from_existing_video_is_preserved_after_validation_error(settings):
+def test_video_city_from_existing_video_is_preserved_after_validation_error(settings, lesson):
+    run(settings, [replace(lesson, teacher="Новый преподаватель")])
     client = create_app(settings).test_client()
     login(client, settings.password)
     fields = {"csrf_token": csrf(client), "teacher": "Новый преподаватель", "city": "Москва",
               "request_date": "2026-10-07", "module": "Kids"}
     assert client.post("/videos/new", base_url="https://localhost", data=fields).status_code == 302
+    with connection(settings.db_path) as db:
+        db.execute("DELETE FROM lessons")
     fields.update(city="", request_date="invalid")
     response = client.post("/videos/new", base_url="https://localhost", data=fields)
     assert response.status_code == 400
@@ -279,16 +283,98 @@ def test_video_city_from_existing_video_is_preserved_after_validation_error(sett
     assert "Проверьте даты" in response.get_data(as_text=True)
 
 
+def test_video_form_only_offers_modules_from_teacher_lessons(settings, lesson):
+    run(settings, [lesson, replace(lesson, stable_id="2", module="Junior"),
+                   replace(lesson, stable_id="3", teacher="Другой преподаватель", module="Matata")])
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+    form = BeautifulSoup(client.get("/videos/new?teacher=Учитель+1",
+                                    base_url="https://localhost").data, "html.parser")
+    modules = form.select('select[name="module"] option')
+    assert [option["value"] for option in modules] == ["Kids", "Junior"]
+    assert form.select_one('select[name="module"] option[selected]')["value"] == "Kids"
+    options = {option["data-teacher"]: json.loads(option["data-modules"])
+               for option in form.select("#video-teachers option")}
+    assert options == {"Учитель 1": ["Kids", "Junior"], "Другой преподаватель": ["Matata"]}
+
+
+def test_video_modules_are_scoped_to_teacher_city(settings, lesson):
+    run(settings, [lesson, replace(lesson, stable_id="2", city="Минск", module="Matata")])
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+    form = BeautifulSoup(client.get("/videos/new?teacher=Учитель+1&city=Москва",
+                                    base_url="https://localhost").data, "html.parser")
+    assert [option["value"] for option in form.select('select[name="module"] option')] == ["Kids"]
+    fields = {"csrf_token": csrf(client), "teacher": "Учитель 1 — Минск",
+              "request_date": "2026-10-07", "module": "Kids"}
+    assert client.post("/videos/new", base_url="https://localhost", data=fields).status_code == 400
+    fields["module"] = "Matata"
+    assert client.post("/videos/new", base_url="https://localhost", data=fields).status_code == 302
+
+
+@pytest.mark.parametrize("module", ["Matata", "UserBasic", "Junior"])
+def test_video_save_rejects_modules_not_taught_by_teacher(settings, lesson, module):
+    run(settings, [lesson])
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+    response = client.post("/videos/new", base_url="https://localhost", data={
+        "csrf_token": csrf(client), "teacher": lesson.teacher, "request_date": "2026-10-07",
+        "module": module,
+    })
+    assert response.status_code == 400
+    assert "Выберите модуль, который ведёт этот преподаватель" in response.get_data(as_text=True)
+    form = BeautifulSoup(response.data, "html.parser")
+    assert module not in [option["value"] for option in form.select('select[name="module"] option')]
+    with connection(settings.db_path) as db:
+        assert db.execute("SELECT COUNT(*) FROM videos").fetchone()[0] == 0
+
+
+def test_video_with_no_lessons_does_not_offer_all_modules(settings):
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+    form = BeautifulSoup(client.get("/videos/new?teacher=Новое+имя&city=Москва",
+                                    base_url="https://localhost").data, "html.parser")
+    assert form.select_one('select[name="module"]').has_attr("disabled")
+    assert [option["value"] for option in form.select('select[name="module"] option')] == [""]
+    response = client.post("/videos/new", base_url="https://localhost", data={
+        "csrf_token": csrf(client), "teacher": "Новое имя", "city": "Москва",
+        "request_date": "2026-10-07", "module": "Matata",
+    })
+    assert response.status_code == 400
+
+
+def test_old_video_module_is_editable_but_does_not_authorize_new_video(settings, lesson):
+    run(settings, [replace(lesson, module="Matata")])
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+    fields = {"csrf_token": csrf(client), "teacher": lesson.teacher, "city": lesson.city,
+              "request_date": "2026-10-07", "module": "Matata"}
+    assert client.post("/videos/new", base_url="https://localhost", data=fields).status_code == 302
+    with connection(settings.db_path) as db:
+        db.execute("UPDATE lessons SET module='Kids'")
+    form = BeautifulSoup(client.get("/videos/new?teacher=Учитель+1",
+                                    base_url="https://localhost").data, "html.parser")
+    assert [option["value"] for option in form.select('select[name="module"] option')] == ["Kids"]
+    assert client.post("/videos/new", base_url="https://localhost", data=fields).status_code == 400
+    fields["positive_notes"] = "Уточнённые заметки"
+    assert client.post("/videos/1/edit", base_url="https://localhost", data=fields).status_code == 302
+    fields["module"] = "Junior"
+    assert client.post("/videos/1/edit", base_url="https://localhost", data=fields).status_code == 400
+    with connection(settings.db_path) as db:
+        assert tuple(db.execute("SELECT module,positive_notes FROM videos").fetchone()) == (
+            "Matata", "Уточнённые заметки")
+
+
 @pytest.fixture
 def video_delete_client(settings, lesson):
     run(settings, [lesson])
     coordinator_id = add_coordinator(settings)
     client = create_app(settings).test_client()
     login(client, settings.password)
-    for module in ("Kids", "Matata"):
+    for _ in range(2):
         response = client.post("/videos/new", base_url="https://localhost", data={
             "csrf_token": csrf(client), "teacher": lesson.teacher,
-            "request_date": "2026-10-07", "module": module,
+            "request_date": "2026-10-07", "module": "Kids",
             "coordinator_id": str(coordinator_id), "positive_notes": "Заметки о занятии",
         })
         assert response.status_code == 302
@@ -364,7 +450,8 @@ def test_video_delete_missing_record_returns_404(video_delete_client, method):
     assert response.status_code == 404
 
 
-def test_video_excel_contains_reference_fields_and_safe_text(settings):
+def test_video_excel_contains_reference_fields_and_safe_text(settings, lesson):
+    run(settings, [replace(lesson, teacher="Елена Пример")])
     coordinator_id = add_coordinator(settings)
     client = create_app(settings).test_client()
     login(client, settings.password)
@@ -390,7 +477,8 @@ def test_video_excel_contains_reference_fields_and_safe_text(settings):
 
 
 @pytest.mark.parametrize("url", ["javascript:alert(1)", "file:///etc/passwd"])
-def test_video_rejects_non_web_links(settings, url):
+def test_video_rejects_non_web_links(settings, lesson, url):
+    run(settings, [replace(lesson, teacher="Елена")])
     client = create_app(settings).test_client()
     login(client, settings.password)
     response = client.post("/videos/new", base_url="https://localhost", data={
