@@ -27,8 +27,8 @@ const run = elements => vm.runInNewContext(source, {document: {
 """
 
 
-def run_script(test):
-    subprocess.run([shutil.which("node"), "-e", HARNESS + test, str(SCRIPT)],
+def run_script(test, script=SCRIPT):
+    subprocess.run([shutil.which("node"), "-e", HARNESS + test, str(script)],
                    check=True, capture_output=True, text=True)
 
 
@@ -97,3 +97,30 @@ input.value = ''; input.fire('input');
 assert.equal(rows.every(row => !row.hidden), true);
 assert.equal(noResults.hidden, true);
 """)
+
+
+def test_tutor_search_matches_city_name_and_combined_prefixes_in_one_field():
+    run_script("""
+const input = element(), count = element(), noResults = element();
+const rows = [['Москва', 'Кирилл Шишканов'], ['Минск', 'Кирилл Шишканов'],
+  ['Минск', 'Анна Иванова'], ['Ёлкино', 'Фёдор Семёнов']]
+  .map(([city, name]) => ({dataset: {city, name}, hidden: false}));
+const table = {querySelectorAll: () => rows, querySelector: () => noResults};
+run({'#tutor-search': input, '#tutors-table': table, '#tutor-count': count});
+input.value = 'мин'; input.fire('input');
+assert.deepEqual(rows.map(row => row.hidden), [true, false, false, true]);
+assert.equal(count.textContent, 2);
+input.value = 'шиш'; input.fire('input');
+assert.deepEqual(rows.map(row => row.hidden), [false, false, true, true]);
+input.value = 'МИН КИР'; input.fire('input');
+assert.deepEqual(rows.map(row => row.hidden), [true, false, true, true]);
+assert.equal(count.textContent, 1); assert.equal(noResults.hidden, true);
+input.value = 'ван'; input.fire('input');
+assert.equal(rows.every(row => row.hidden), true);
+assert.equal(noResults.hidden, false); assert.equal(count.textContent, 0);
+input.value = '  ел  фе  '; input.fire('input');
+assert.equal(rows[3].hidden, false); assert.equal(count.textContent, 1);
+input.value = ''; input.fire('input');
+assert.equal(rows.every(row => !row.hidden), true);
+assert.equal(noResults.hidden, true); assert.equal(count.textContent, 4);
+""", script=SCRIPT.with_name("tutors-search.js"))

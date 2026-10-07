@@ -3,7 +3,7 @@
 {% block content %}
 <div class="page-heading"><div><p class="eyebrow">КОМАНДА</p><h1>Преподаватели</h1><p class="muted">Список отсортирован по городу. Нажмите на курс, чтобы открыть занятия.</p></div><div class="total"><strong id="tutor-count" aria-live="polite">{{ teachers|length }}</strong><span>преподавателей</span></div></div>
 <section class="card">
-<label class="tutor-search">Поиск по имени или фамилии<input id="tutor-search" type="search" autocomplete="off" placeholder="Начните вводить имя или фамилию" aria-controls="tutors-table"><span class="field-hint">Поиск обновляет список сразу, без перезагрузки.</span></label>
+<label class="tutor-search">Поиск по городу, имени или фамилии<input id="tutor-search" type="search" autocomplete="off" placeholder="Начните вводить город, имя или фамилию" aria-controls="tutors-table"><span class="field-hint">Поиск обновляет список сразу, без перезагрузки.</span></label>
 <form class="filters tutor-filters" method="get">
   <label>Курс<select name="module"><option value="">Все курсы</option>{% for module in modules %}<option value="{{ module }}" {% if course_filter == module %}selected{% endif %}>{{ module }}</option>{% endfor %}</select></label>
   <div class="filter-actions"><button type="submit">Показать</button><a class="quiet" href="{{ url_for('tutors') }}">Сбросить</a></div>
@@ -12,7 +12,7 @@
 <section class="card table-scroll">
 <table id="tutors-table">
   <thead><tr><th>Город (А–Я)</th><th>Преподаватель</th><th>Курсы</th><th>Видео</th></tr></thead>
-  <tbody>{% for teacher in teachers %}<tr data-tutor-row data-name="{{ teacher.teacher }}">
+  <tbody>{% for teacher in teachers %}<tr data-tutor-row data-name="{{ teacher.teacher }}" data-city="{{ teacher.city }}">
     <td>{{ teacher.city }}</td>
     <td><strong><a href="{{ url_for('tutor_profile', city=teacher.city, teacher=teacher.teacher) }}">{{ teacher.teacher }}</a></strong>{{ telegram_icon(teacher.telegram_username) }}</td>
     <td>{% for module in teacher.modules %}<a class="badge module-link {{ module.lower() }}" href="{{ url_for(module.lower(), city=teacher.city, teacher=teacher.teacher) }}">{{ module }}</a>{% else %}<span class="muted">Нет занятий</span>{% endfor %}</td>

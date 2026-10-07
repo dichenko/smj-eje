@@ -13,7 +13,7 @@
     let visibleCount = 0;
 
     for (const row of rows) {
-      const words = normalize(row.dataset.name).split(/\s+/);
+      const words = normalize(`${row.dataset.city} ${row.dataset.name}`).split(/\s+/);
       const matches = terms.every((term) => words.some((word) => word.startsWith(term)));
       row.hidden = !matches;
       if (matches) visibleCount += 1;

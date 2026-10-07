@@ -145,6 +145,8 @@ def test_tutor_search_is_realtime_and_scripts_are_allowed_from_static(app, setti
     page = client.get("/tutors", base_url="https://localhost").get_data(as_text=True)
     assert 'id="tutor-search" type="search"' in page
     assert 'data-tutor-row data-name="Учитель 1"' in page
+    assert 'data-city="Москва"' in page
+    assert "Поиск по городу, имени или фамилии" in page
     assert "tutors-search.js" in page
     script = client.get("/static/tutors-search.js", base_url="https://localhost")
     assert script.status_code == 200
