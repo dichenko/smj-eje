@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">НАБЛЮДЕНИЯ ЗАНЯТИЙ</p><h1>Удалить видео?</h1></div></div>
+<section class="card form-card">
+  <p><strong>{{ video.teacher }}</strong> · {{ video.city }} · <span class="badge {{ video.module.lower() }}">{{ video.module }}</span></p>
+  <p class="muted">Дата запроса: {{ video.request_date[8:10] }}.{{ video.request_date[5:7] }}.{{ video.request_date[:4] }}</p>
+  <p>Будет удалена запись с заметками и ссылкой на видео. Удаление нельзя отменить.</p>
+  <form method="post" class="form-actions">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="danger">Удалить видео</button>
+    <a class="quiet" href="{{ cancel_url }}">Отмена</a>
+  </form>
+</section>
+{% endblock %}

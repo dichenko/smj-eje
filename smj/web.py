@@ -551,6 +551,24 @@ def create_app(settings=None):
                 error = str(exception)
         return render_video_form(values, error, video_id)
 
+    @app.route("/videos/<int:video_id>/delete", methods=["GET", "POST"])
+    def video_delete(video_id):
+        selected = {key: request.args.get(key, "").strip()[:200] for key in ("city", "teacher")}
+        listing_url = url_for("videos", **{key: value for key, value in selected.items() if value})
+        with connection(settings.db_path) as db:
+            if request.method == "POST":
+                deleted = db.execute("DELETE FROM videos WHERE id=?", [video_id])
+                if deleted.rowcount != 1:
+                    abort(404)
+                return redirect(listing_url)
+            video = db.execute("SELECT * FROM videos WHERE id=?", [video_id]).fetchone()
+        if not video:
+            abort(404)
+        cancel_url = (url_for("video_edit", video_id=video_id)
+                      if request.args.get("return_to") == "edit" else listing_url)
+        return render_template("video_delete.html", title="Удалить видео", video=dict(video),
+                               cancel_url=cancel_url)
+
     @app.get("/videos/<int:video_id>/report.xlsx")
     def video_excel_report(video_id):
         with connection(settings.db_path) as db:

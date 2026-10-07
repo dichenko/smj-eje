@@ -18,7 +18,7 @@
     <td>{{ video.coordinator_name or '—' }}</td>
     <td>{% if video.video_url %}<a href="{{ video.video_url }}" target="_blank" rel="noopener noreferrer">Открыть</a>{% else %}—{% endif %}</td>
     <td><a href="{{ url_for('video_excel_report', video_id=video.id) }}">Скачать Excel</a></td>
-    <td><a class="quiet" href="{{ url_for('video_edit', video_id=video.id) }}">Изменить</a></td>
+    <td><div class="video-actions"><a class="quiet" href="{{ url_for('video_edit', video_id=video.id) }}">Изменить</a><a class="quiet danger" href="{{ url_for('video_delete', video_id=video.id, city=city_filter, teacher=teacher_filter) }}">Удалить</a></div></td>
   </tr>{% else %}<tr><td class="empty" colspan="9">Видео пока не добавлены.</td></tr>{% endfor %}</tbody>
 </table>
 </section>

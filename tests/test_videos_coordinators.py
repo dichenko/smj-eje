@@ -42,7 +42,7 @@ def add_coordinator(settings, **overrides):
 
 
 @pytest.mark.parametrize("path", ["/tutors", "/tutors/profile", "/videos", "/videos/new", "/coordinators",
-    "/coordinators/new", "/videos/1/report.xlsx"])
+    "/coordinators/new", "/videos/1/report.xlsx", "/videos/1/delete"])
 def test_video_and_coordinator_pages_require_auth(settings, path):
     assert create_app(settings).test_client().get(path, base_url="https://localhost").status_code == 302
 
@@ -277,6 +277,91 @@ def test_video_city_from_existing_video_is_preserved_after_validation_error(sett
     form = BeautifulSoup(response.data, "html.parser")
     assert form.select_one('input[name="city"]')["value"] == "Москва"
     assert "Проверьте даты" in response.get_data(as_text=True)
+
+
+@pytest.fixture
+def video_delete_client(settings, lesson):
+    run(settings, [lesson])
+    coordinator_id = add_coordinator(settings)
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+    for module in ("Kids", "Matata"):
+        response = client.post("/videos/new", base_url="https://localhost", data={
+            "csrf_token": csrf(client), "teacher": lesson.teacher,
+            "request_date": "2026-10-07", "module": module,
+            "coordinator_id": str(coordinator_id), "positive_notes": "Заметки о занятии",
+        })
+        assert response.status_code == 302
+    return client
+
+
+def test_video_delete_links_show_confirmation_and_preserve_cancel_destination(settings, video_delete_client):
+    client = video_delete_client
+    listing = BeautifulSoup(client.get("/videos?city=Москва&teacher=Учитель+1",
+                                        base_url="https://localhost").data, "html.parser")
+    link = listing.select_one('a[href^="/videos/1/delete"]')
+    assert link.get_text(strip=True) == "Удалить"
+    assert parse_qs(urlparse(link["href"]).query) == {"city": ["Москва"], "teacher": ["Учитель 1"]}
+    page = client.get(link["href"], base_url="https://localhost")
+    assert page.status_code == 200
+    confirmation = BeautifulSoup(page.data, "html.parser")
+    assert "Учитель 1" in confirmation.get_text() and "07.10.2026" in confirmation.get_text()
+    assert confirmation.select_one('form[method="post"] input[name="csrf_token"]')
+    cancel = confirmation.find("a", string="Отмена")
+    assert parse_qs(urlparse(cancel["href"]).query) == {"city": ["Москва"], "teacher": ["Учитель 1"]}
+    edit = BeautifulSoup(client.get("/videos/1/edit", base_url="https://localhost").data, "html.parser")
+    edit_link = edit.find("a", string="Удалить видео")
+    edit_confirmation = BeautifulSoup(client.get(edit_link["href"],
+                                                 base_url="https://localhost").data, "html.parser")
+    assert edit_confirmation.find("a", string="Отмена")["href"] == "/videos/1/edit"
+    with connection(settings.db_path) as db:
+        assert db.execute("SELECT COUNT(*) FROM videos").fetchone()[0] == 2
+
+
+def test_video_delete_requires_login(settings, video_delete_client):
+    anonymous = create_app(settings).test_client()
+    response = anonymous.post("/videos/1/delete", base_url="https://localhost",
+                              data={"csrf_token": csrf(anonymous)})
+    assert response.status_code == 302 and response.location == "/login"
+    with connection(settings.db_path) as db:
+        assert db.execute("SELECT COUNT(*) FROM videos").fetchone()[0] == 2
+
+
+@pytest.mark.parametrize("token", ["", "invalid"])
+def test_video_delete_rejects_invalid_csrf(settings, video_delete_client, token):
+    response = video_delete_client.post("/videos/1/delete", base_url="https://localhost",
+                                        data={"csrf_token": token})
+    assert response.status_code == 400
+    with connection(settings.db_path) as db:
+        assert db.execute("SELECT COUNT(*) FROM videos").fetchone()[0] == 2
+
+
+def test_video_delete_removes_only_selected_record_and_updates_counts(settings, video_delete_client):
+    client = video_delete_client
+    response = client.post("/videos/1/delete?city=Москва&teacher=Учитель+1",
+                           base_url="https://localhost", data={"csrf_token": csrf(client)})
+    assert response.status_code == 302
+    assert urlparse(response.location).path == "/videos"
+    assert parse_qs(urlparse(response.location).query) == {"city": ["Москва"], "teacher": ["Учитель 1"]}
+    with connection(settings.db_path) as db:
+        assert [row[0] for row in db.execute("SELECT id FROM videos")] == [2]
+        assert db.execute("SELECT COUNT(*) FROM lessons").fetchone()[0] == 1
+        assert db.execute("SELECT COUNT(*) FROM coordinators").fetchone()[0] == 1
+    tutors = BeautifulSoup(client.get("/tutors", base_url="https://localhost").data, "html.parser")
+    assert tutors.select_one(".count-link").get_text(strip=True) == "1"
+    assert client.get("/videos/1/edit", base_url="https://localhost").status_code == 404
+    assert client.get("/videos/1/report.xlsx", base_url="https://localhost").status_code == 404
+    assert client.get("/videos/2/edit", base_url="https://localhost").status_code == 200
+    assert client.post("/videos/1/delete", base_url="https://localhost",
+                       data={"csrf_token": csrf(client)}).status_code == 404
+
+
+@pytest.mark.parametrize("method", ["GET", "POST"])
+def test_video_delete_missing_record_returns_404(video_delete_client, method):
+    response = video_delete_client.open("/videos/999/delete", method=method,
+                                        base_url="https://localhost",
+                                        data={"csrf_token": csrf(video_delete_client)} if method == "POST" else None)
+    assert response.status_code == 404
 
 
 def test_video_excel_contains_reference_fields_and_safe_text(settings):

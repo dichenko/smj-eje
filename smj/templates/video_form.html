@@ -14,7 +14,7 @@
   <label class="wide-field">Ссылка на видео<input type="url" name="video_url" value="{{ video.video_url }}" maxlength="2048" placeholder="https://…"><span class="field-hint">Если указана дата отправки, ссылка обязательна.</span></label>
   <label class="wide-field">Что хорошо<textarea name="positive_notes" rows="5" maxlength="16000">{{ video.positive_notes }}</textarea></label>
   <label class="wide-field">Зона роста<textarea name="growth_notes" rows="5" maxlength="16000">{{ video.growth_notes }}</textarea></label>
-  <div class="form-actions"><button type="submit">Сохранить</button><a class="quiet" href="{{ url_for('videos') }}">Отмена</a>{% if video_id %}<a class="quiet" href="{{ url_for('video_excel_report', video_id=video_id) }}">Скачать Excel</a>{% endif %}</div>
+  <div class="form-actions"><button type="submit">Сохранить</button><a class="quiet" href="{{ url_for('videos') }}">Отмена</a>{% if video_id %}<a class="quiet" href="{{ url_for('video_excel_report', video_id=video_id) }}">Скачать Excel</a><a class="quiet danger" href="{{ url_for('video_delete', video_id=video_id, return_to='edit') }}">Удалить видео</a>{% endif %}</div>
 </form>
 </section>
 <script src="{{ url_for('static', filename='video-form.js') }}" defer></script>
