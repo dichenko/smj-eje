@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="page-heading"><div><p class="eyebrow">ПРЕПОДАВАТЕЛЬ</p><h1>{{ tutor.teacher }}</h1><p class="muted">{{ tutor.city }}</p></div><a class="quiet" href="{{ url_for('tutors') }}">← К списку преподавателей</a></div>
+<div class="page-heading"><div><p class="eyebrow">ПРЕПОДАВАТЕЛЬ</p><h1>{{ tutor.teacher }}</h1><p class="muted">{{ tutor.city }}</p></div><div class="heading-actions"><a class="button" href="{{ url_for('video_new', city=tutor.city, teacher=tutor.teacher) }}">Добавить видео</a><a class="quiet" href="{{ url_for('tutors') }}">← К списку преподавателей</a></div></div>
 <section class="card tutor-profile-card">
   <h2>Профиль</h2>
   <div class="tutor-profile-grid">
