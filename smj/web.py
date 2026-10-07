@@ -367,12 +367,42 @@ def create_app(settings=None):
         return render_template("coordinator_form.html", title="Редактировать координатора",
                                coordinator=values, error=error)
 
+    def video_teacher_cities():
+        with connection(settings.db_path) as db:
+            rows = db.execute("""SELECT teacher,city FROM lessons
+                UNION SELECT teacher,city FROM videos
+                UNION SELECT teacher,city FROM tutor_contacts""").fetchall()
+        result = defaultdict(list)
+        for row in sorted(rows, key=lambda row: (row["teacher"].casefold(), row["city"].casefold())):
+            result[row["teacher"]].append(row["city"])
+        return result
+
+    def resolve_video_teacher(values, teacher_cities):
+        teacher = values.get("teacher", "")
+        # Duplicate names are selected as a teacher/city pair in the datalist.
+        if teacher not in teacher_cities:
+            for name, cities in teacher_cities.items():
+                if len(cities) > 1:
+                    for city in cities:
+                        if teacher == f"{name} — {city}":
+                            values.update(teacher=name, city=city)
+                            return
+        cities = teacher_cities.get(teacher, [])
+        if len(cities) == 1:
+            values["city"] = cities[0]
+        elif cities and values.get("city") not in cities:
+            values["city"] = ""
+
     def video_form_values():
         values = {key: request.form.get(key, "").strip() for key in
                   ("city", "teacher", "request_date", "sent_date", "module", "video_url",
                    "positive_notes", "growth_notes", "coordinator_id")}
+        teacher_cities = video_teacher_cities()
+        resolve_video_teacher(values, teacher_cities)
         if not values["city"] or len(values["city"]) > 200:
-            raise ValueError("Укажите город (до 200 символов).")
+            if values["teacher"] in teacher_cities:
+                raise ValueError("Выберите преподавателя с городом из списка.")
+            raise ValueError("Укажите город нового преподавателя (до 200 символов).")
         if not values["teacher"] or len(values["teacher"]) > 200:
             raise ValueError("Укажите преподавателя (до 200 символов).")
         try:
@@ -444,11 +474,23 @@ def create_app(settings=None):
                                teacher_filter=teacher_filter, teachers=teachers, cities=cities)
 
     def render_video_form(values, error=None, video_id=None):
+        teacher_cities = video_teacher_cities()
+        resolve_video_teacher(values, teacher_cities)
+        teacher_options = [
+            {"value": name if len(cities) == 1 else f"{name} — {city}",
+             "teacher": name, "city": city}
+            for name, cities in teacher_cities.items() for city in cities
+        ]
+        teacher_input = values.get("teacher", "")
+        if len(teacher_cities.get(teacher_input, [])) > 1 and values.get("city"):
+            teacher_input = f"{teacher_input} — {values['city']}"
         teachers, cities, coordinator_rows, default_coordinator = video_form_choices(values.get("city", ""))
         if not values.get("coordinator_id"):
             values["coordinator_id"] = default_coordinator
         return render_template("video_form.html", title="Видео преподавателя" if video_id else "Добавить видео",
                                video=values, teachers=teachers, cities=cities,
+                               teacher_options=teacher_options, teacher_input=teacher_input,
+                               automatic_city=values.get("teacher") in teacher_cities,
                                coordinators=coordinator_rows, error=error, video_id=video_id), 400 if error else 200
 
     @app.route("/videos/new", methods=["GET", "POST"])

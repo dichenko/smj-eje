@@ -24,7 +24,7 @@ dev = ["pytest>=8.3,<10", "ruff>=0.11,<1"]
 smj = "smj.cli:main"
 
 [tool.setuptools.package-data]
-smj = ["templates/*.html", "static/*.css"]
+smj = ["templates/*.html", "static/*.css", "static/*.js", "static/*.svg"]
 
 [tool.setuptools.packages.find]
 include = ["smj*"]

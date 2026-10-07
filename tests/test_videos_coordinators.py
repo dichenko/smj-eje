@@ -204,6 +204,81 @@ def test_teacher_video_filter_offers_prefilled_add_form(settings):
     assert f'name="request_date" value="{datetime.now(settings.timezone).date().isoformat()}"' in html
 
 
+def test_video_form_derives_city_and_coordinator_from_teacher(settings, lesson):
+    run(settings, [lesson])
+    coordinator_id = add_coordinator(settings)
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+    response = client.get("/videos/new?city=&teacher=Учитель+1", base_url="https://localhost")
+    form = BeautifulSoup(response.data, "html.parser")
+    assert form.select_one('input[name="city"]')["value"] == "Москва"
+    assert form.select_one('input[name="city"]').has_attr("readonly")
+    assert form.select_one('select[name="coordinator_id"] option[selected]')["value"] == str(coordinator_id)
+    assert form.select_one('script[src="/static/video-form.js"]')
+    assert client.get("/static/video-form.js", base_url="https://localhost").status_code == 200
+
+
+@pytest.mark.parametrize("supplied_city", ["", "Неверный город"])
+def test_video_save_resolves_city_even_without_javascript(settings, lesson, supplied_city):
+    run(settings, [lesson])
+    coordinator_id = add_coordinator(settings)
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+    response = client.post("/videos/new", base_url="https://localhost", data={
+        "csrf_token": csrf(client), "city": supplied_city, "teacher": lesson.teacher,
+        "request_date": "2026-10-07", "module": "Kids",
+    })
+    assert response.status_code == 302
+    with connection(settings.db_path) as db:
+        row = db.execute("SELECT city,teacher,coordinator_id FROM videos").fetchone()
+        assert tuple(row) == (lesson.city, lesson.teacher, coordinator_id)
+
+
+def test_video_teacher_change_updates_city_when_editing(settings, lesson):
+    run(settings, [lesson, replace(lesson, stable_id="2", teacher="Учитель 2", city="Минск")])
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+    fields = {"csrf_token": csrf(client), "teacher": lesson.teacher,
+              "request_date": "2026-10-07", "module": "Kids"}
+    assert client.post("/videos/new", base_url="https://localhost", data=fields).status_code == 302
+    fields.update(teacher="Учитель 2", city="Москва")
+    assert client.post("/videos/1/edit", base_url="https://localhost", data=fields).status_code == 302
+    with connection(settings.db_path) as db:
+        assert db.execute("SELECT city FROM videos").fetchone()[0] == "Минск"
+
+
+def test_video_ambiguous_teacher_requires_pair_and_never_guesses(settings, lesson):
+    run(settings, [lesson, replace(lesson, stable_id="2", city="Минск")])
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+    form = BeautifulSoup(client.get("/videos/new?teacher=Учитель+1",
+                                    base_url="https://localhost").data, "html.parser")
+    assert form.select_one('input[name="city"]')["value"] == ""
+    assert {option["value"] for option in form.select("#video-teachers option")} == {
+        "Учитель 1 — Москва", "Учитель 1 — Минск"}
+    fields = {"csrf_token": csrf(client), "teacher": lesson.teacher,
+              "request_date": "2026-10-07", "module": "Kids"}
+    assert client.post("/videos/new", base_url="https://localhost", data=fields).status_code == 400
+    fields["teacher"] = "Учитель 1 — Минск"
+    assert client.post("/videos/new", base_url="https://localhost", data=fields).status_code == 302
+    with connection(settings.db_path) as db:
+        assert tuple(db.execute("SELECT city,teacher FROM videos").fetchone()) == ("Минск", "Учитель 1")
+
+
+def test_video_city_from_existing_video_is_preserved_after_validation_error(settings):
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+    fields = {"csrf_token": csrf(client), "teacher": "Новый преподаватель", "city": "Москва",
+              "request_date": "2026-10-07", "module": "Kids"}
+    assert client.post("/videos/new", base_url="https://localhost", data=fields).status_code == 302
+    fields.update(city="", request_date="invalid")
+    response = client.post("/videos/new", base_url="https://localhost", data=fields)
+    assert response.status_code == 400
+    form = BeautifulSoup(response.data, "html.parser")
+    assert form.select_one('input[name="city"]')["value"] == "Москва"
+    assert "Проверьте даты" in response.get_data(as_text=True)
+
+
 def test_video_excel_contains_reference_fields_and_safe_text(settings):
     coordinator_id = add_coordinator(settings)
     client = create_app(settings).test_client()
