@@ -96,6 +96,10 @@ chmod +x "$3/bin/python"
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self.git(self.app, "rev-parse", "HEAD").strip(), self.target)
         self.assertTrue((self.app / ".venv").is_symlink())
+        for directory in (self.state, self.state / "venvs", (self.app / ".venv").resolve()):
+            self.assertEqual(directory.stat().st_mode & 0o005, 0o005,
+                             "smj service must be able to read and traverse the environment")
+        self.assertEqual((self.app / "requirements.txt").stat().st_mode & 0o004, 0o004)
         self.assertEqual((self.units / "smj-web.service").read_text(), "new unit\n")
         log = self.log.read_text()
         self.assertLess(log.index("start smj-backup.service"), log.index("pip check/install"))

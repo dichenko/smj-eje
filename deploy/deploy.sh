@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # Run as root through the restricted deployment SSH key, or manually with a commit SHA.
 set -Eeuo pipefail
-umask 077
+# Dependencies must be readable by the unprivileged smj service user.
+umask 022
 
 APP_DIR=${SMJ_APP_DIR:-/opt/smj-eje}
 STATE_DIR=${SMJ_DEPLOY_STATE_DIR:-/opt/smj-eje-deploy}
 TARGET=${1:-}
 [[ $EUID == 0 ]] || { echo 'Deployment requires root.' >&2; exit 1; }
 [[ $TARGET =~ ^[0-9a-f]{40}$ ]] || { echo 'Expected a full commit SHA.' >&2; exit 1; }
-mkdir -p "$STATE_DIR/venvs"
+install -d -m 0755 "$STATE_DIR" "$STATE_DIR/venvs"
 exec 9>"$STATE_DIR/deploy.lock"
 flock -w 900 9
 cd "$APP_DIR"
@@ -28,6 +29,7 @@ UNITS_DIR=$(mktemp -d "$STATE_DIR/units-XXXXXX")
 cp /etc/systemd/system/smj-*.service /etc/systemd/system/smj-*.timer "$UNITS_DIR/"
 OLD_VENV=$(readlink -f "$APP_DIR/.venv")
 NEW_VENV=$(mktemp -d "$STATE_DIR/venvs/venv-XXXXXX")
+chmod 0755 "$NEW_VENV"
 CODE_CHANGED=0
 VENV_CHANGED=0
 
