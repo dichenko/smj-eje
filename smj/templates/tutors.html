@@ -13,9 +13,9 @@
   <thead><tr><th>Город (А–Я)</th><th>Преподаватель</th><th>Курсы</th><th>Видео</th></tr></thead>
   <tbody>{% for teacher in teachers %}<tr data-tutor-row data-name="{{ teacher.teacher }}">
     <td>{{ teacher.city }}</td>
-    <td><strong><a href="{{ url_for('tutor_profile', city=teacher.city, teacher=teacher.teacher) }}">{{ teacher.teacher }}</a></strong></td>
+    <td><strong><a href="{{ url_for('tutor_profile', city=teacher.city, teacher=teacher.teacher) }}">{{ teacher.teacher }}</a></strong>{% if teacher.telegram_username %}&nbsp;<span class="tutor-telegram-icon" role="img" aria-label="Telegram" title="@{{ teacher.telegram_username }}"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="12" fill="#2AABEE"/><path d="M18.4 6.8 16 18c-.2.8-.7 1-1.3.6l-3.7-2.7-1.8 1.7c-.2.2-.3.3-.7.3l.3-3.8 6.9-6.3c.3-.3-.1-.4-.5-.2l-8.5 5.4-3.7-1.2c-.8-.2-.8-.8.2-1.2L17.6 5.2c.7-.3 1.3.2.8 1.6Z" fill="#fff"/></svg></span>{% endif %}</td>
     <td>{% for module in teacher.modules %}<a class="badge module-link {{ module.lower() }}" href="{{ url_for(module.lower(), city=teacher.city, teacher=teacher.teacher) }}">{{ module }}</a>{% else %}<span class="muted">Нет занятий</span>{% endfor %}</td>
-    <td><a class="count-link" href="{{ url_for('videos', city=teacher.city, teacher=teacher.teacher) }}">{{ teacher.video_count }}</a>{% if teacher.telegram_username %}<a class="small-link tutor-telegram-link" href="https://telegram.me/{{ teacher.telegram_username }}" target="_blank" rel="noopener noreferrer">@{{ teacher.telegram_username }}</a>{% endif %}</td>
+    <td><a class="count-link" href="{{ url_for('videos', city=teacher.city, teacher=teacher.teacher) }}">{{ teacher.video_count }}</a></td>
   </tr>{% else %}<tr data-empty-list><td class="empty" colspan="4">{% if course_filter %}Нет преподавателей по курсу {{ course_filter }}.{% else %}Преподаватели появятся после загрузки занятий.{% endif %}</td></tr>{% endfor %}
   <tr data-no-search-results hidden><td class="empty" colspan="4">Подходящих преподавателей не найдено.</td></tr></tbody>
 </table>

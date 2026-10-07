@@ -176,7 +176,7 @@ def test_teacher_profile_shows_lessons_and_allows_telegram_edit(settings, lesson
     assert '<a href="https://telegram.me/teacher_example" target="_blank"' in profile
 
 
-def test_tutor_telegram_is_below_video_count_and_absent_without_username(settings, lesson):
+def test_tutor_telegram_icon_is_after_name_and_absent_without_username(settings, lesson):
     run(settings, [lesson, replace(lesson, stable_id="2", teacher="Учитель 2")])
     with connection(settings.db_path) as db:
         db.execute("INSERT INTO tutor_contacts(city,teacher,telegram_username) VALUES(?,?,?)",
@@ -184,14 +184,16 @@ def test_tutor_telegram_is_below_video_count_and_absent_without_username(setting
     client = create_app(settings).test_client()
     login(client, settings.password)
     page = BeautifulSoup(client.get("/tutors", base_url="https://localhost").data, "html.parser")
-    cell = page.select_one('[data-name="Учитель 1"] td:nth-child(4)')
-    links = cell.select("a")
-    assert links[0].has_attr("class") and "count-link" in links[0]["class"]
-    assert links[1]["href"] == "https://telegram.me/teacher_example"
-    assert "small-link" in links[1]["class"]
-    assert links[1].get_text(strip=True) == "@teacher_example"
-    empty = page.select_one('[data-name="Учитель 2"] td:nth-child(4)')
-    assert len(empty.select("a")) == 1 and empty.get_text(strip=True) == "0"
+    row = page.select_one('[data-name="Учитель 1"]')
+    cell = row.select_one("td:nth-child(2)")
+    icon = cell.select_one("strong + .tutor-telegram-icon")
+    assert icon and icon.select_one("svg")
+    assert icon["title"] == "@teacher_example" and icon["aria-label"] == "Telegram"
+    assert not icon.find_parent("a")
+    assert cell.get_text(strip=True) == "Учитель 1"
+    assert not row.select_one("td:nth-child(4) .tutor-telegram-icon")
+    assert not page.select_one('a[href^="https://telegram.me/"]')
+    assert not page.select_one('[data-name="Учитель 2"] .tutor-telegram-icon')
 
 
 def test_coordinator_search_exposes_city_and_name_without_unescaped_html(settings):
