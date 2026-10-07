@@ -188,11 +188,11 @@ def test_tutor_telegram_icon_is_after_name_and_absent_without_username(settings,
     cell = row.select_one("td:nth-child(2)")
     icon = cell.select_one("strong + .tutor-telegram-icon")
     assert icon and icon.select_one("svg")
-    assert icon["title"] == "@teacher_example" and icon["aria-label"] == "Telegram"
-    assert not icon.find_parent("a")
+    assert icon["title"] == "@teacher_example" and icon["aria-label"] == "Открыть Telegram @teacher_example"
+    assert icon.name == "a" and icon["href"] == "https://telegram.me/teacher_example"
+    assert icon["target"] == "_blank" and set(icon["rel"]) == {"noopener", "noreferrer"}
     assert cell.get_text(strip=True) == "Учитель 1"
     assert not row.select_one("td:nth-child(4) .tutor-telegram-icon")
-    assert not page.select_one('a[href^="https://telegram.me/"]')
     assert not page.select_one('[data-name="Учитель 2"] .tutor-telegram-icon')
 
 
@@ -443,7 +443,8 @@ def test_video_telegram_icons_match_teacher_city_and_selected_coordinator(
             assert (icon is not None) == bool(username)
             if username:
                 assert icon["title"] == "@" + username and icon.select_one("svg")
-                assert not icon.find_parent("a")
+                assert icon.name == "a" and icon["href"] == "https://telegram.me/" + username
+                assert icon["target"] == "_blank" and set(icon["rel"]) == {"noopener", "noreferrer"}
 
 
 def test_video_telegram_icons_absent_for_missing_contacts(settings, video_delete_client):

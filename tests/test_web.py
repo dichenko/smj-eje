@@ -194,7 +194,8 @@ def test_city_report_teacher_links_and_icons_use_each_rows_city(settings, lesson
             icon = cells[4].select_one(".tutor-telegram-icon")
             if link.get_text(strip=True) == "Учитель 1":
                 assert icon and icon["title"] == ("@tomsk_teacher" if row_city == "Томск" else "@moscow_teacher")
-                assert not icon.find_parent("a")
+                assert icon.name == "a" and icon["href"] == "https://telegram.me/" + icon["title"][1:]
+                assert icon["target"] == "_blank" and set(icon["rel"]) == {"noopener", "noreferrer"}
             else:
                 assert icon is None
 
