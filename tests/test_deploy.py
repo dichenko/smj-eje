@@ -36,6 +36,7 @@ class DeployTests(unittest.TestCase):
         subprocess.run(["git", "clone", str(self.source), str(self.app)], check=True,
                        capture_output=True)
         (self.app / ".venv").mkdir()
+        (self.source / ".gitignore").write_text(".venv\n")
         (self.source / "requirements.txt").write_text("new\n")
         (self.source / "deploy" / "smj-web.service").write_text("new unit\n")
         self.commit("update")
@@ -96,6 +97,7 @@ chmod +x "$3/bin/python"
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self.git(self.app, "rev-parse", "HEAD").strip(), self.target)
         self.assertTrue((self.app / ".venv").is_symlink())
+        self.assertEqual(self.git(self.app, "status", "--porcelain").strip(), "")
         for directory in (self.state, self.state / "venvs", (self.app / ".venv").resolve()):
             self.assertEqual(directory.stat().st_mode & 0o005, 0o005,
                              "smj service must be able to read and traverse the environment")

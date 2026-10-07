@@ -13,7 +13,8 @@ install -d -m 0755 "$STATE_DIR" "$STATE_DIR/venvs"
 exec 9>"$STATE_DIR/deploy.lock"
 flock -w 900 9
 cd "$APP_DIR"
-[[ -z $(git status --porcelain) ]] || { echo 'Server checkout has local changes; refusing to overwrite.' >&2; exit 1; }
+# Older checkouts ignore .venv/ directories, but the deployed environment is now a symlink.
+[[ -z $(git status --porcelain -- . ':(exclude).venv') ]] || { echo 'Server checkout has local changes; refusing to overwrite.' >&2; exit 1; }
 git fetch --prune origin main
 if [[ $(git rev-parse origin/main) != "$TARGET" ]]; then
     echo 'A newer push exists; skipping this superseded deployment.'
