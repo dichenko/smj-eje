@@ -27,11 +27,11 @@
 
   const cityList = document.querySelector('#city-search-options');
   const teacherList = document.querySelector('#teacher-search-options');
-  if (!cityList || !teacherList) return;
+  if (!cityList) return;
   const cityInput = document.querySelector('input[name="city"]');
-  const teacherInput = document.querySelector('input[name="teacher"]');
+  const teacherInput = teacherList ? document.querySelector('input[name="teacher"]') : null;
   const cities = [...cityList.options].map(option => option.value);
-  const teachers = [...teacherList.options].map(option => ({name: option.value, city: option.dataset.city}));
+  const teachers = teacherList ? [...teacherList.options].map(option => ({name: option.value, city: option.dataset.city})) : [];
   const exact = (values, value) => values.find(item => normalize(item) === normalize(value));
   const teacherNames = () => {
     const city = exact(cities, cityInput.value);
@@ -50,8 +50,10 @@
   };
   const updateCities = () => updateOptions(cityInput, cityList, cities,
     document.querySelector('#city-search-hint'), 'Начните вводить название города.');
-  const updateTeachers = () => updateOptions(teacherInput, teacherList, teacherNames(),
-    document.querySelector('#teacher-search-hint'), 'Начните вводить имя или фамилию.');
+  const updateTeachers = () => {
+    if (teacherInput) updateOptions(teacherInput, teacherList, teacherNames(),
+      document.querySelector('#teacher-search-hint'), 'Начните вводить имя или фамилию.');
+  };
   const canonicalize = (input, values) => {
     const value = exact(values, input.value);
     if (value) input.value = value;
@@ -59,18 +61,20 @@
   cityInput.addEventListener('input', () => { updateCities(); updateTeachers(); });
   cityInput.addEventListener('change', () => {
     canonicalize(cityInput, cities);
-    if (exact(cities, cityInput.value) && !exact(teacherNames(), teacherInput.value)) teacherInput.value = '';
+    if (teacherInput && exact(cities, cityInput.value) && !exact(teacherNames(), teacherInput.value)) teacherInput.value = '';
     updateCities();
     updateTeachers();
   });
-  teacherInput.addEventListener('input', updateTeachers);
-  teacherInput.addEventListener('change', () => {
-    canonicalize(teacherInput, teacherNames());
-    updateTeachers();
-  });
+  if (teacherInput) {
+    teacherInput.addEventListener('input', updateTeachers);
+    teacherInput.addEventListener('change', () => {
+      canonicalize(teacherInput, teacherNames());
+      updateTeachers();
+    });
+  }
   cityInput.form.addEventListener('submit', event => {
     canonicalize(cityInput, cities);
-    canonicalize(teacherInput, teacherNames());
+    if (teacherInput) canonicalize(teacherInput, teacherNames());
     updateCities();
     updateTeachers();
     if (!cityInput.form.reportValidity()) event.preventDefault();

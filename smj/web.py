@@ -634,6 +634,9 @@ def create_app(settings=None):
     @app.get("/weekly/<start_date>")
     def weekly(start_date=None):
         today = utc_now().astimezone(settings.timezone).date()
+        city_filter = request.args.get("city", "").strip()
+        if len(city_filter) > 200:
+            abort(400, "Filter too long")
         value = start_date or request.args.get("week")
         try:
             start = date.fromisoformat(value) if value else today - timedelta(days=today.weekday() + 7)
@@ -647,9 +650,14 @@ def create_app(settings=None):
         if end < settings.start_date or start > today:
             abort(400, "Week outside the reporting period")
         with connection(settings.db_path) as db:
+            city_clause = " AND city=?" if city_filter else ""
+            params = [max(start, settings.start_date).isoformat(), end.isoformat()]
+            if city_filter:
+                params.append(city_filter)
             rows = db.execute("""SELECT module,topic,city,teacher,group_name,date FROM lessons
-                WHERE date >= ? AND date <= ? ORDER BY city,module,date,topic,group_name""",
-                [max(start, settings.start_date).isoformat(), end.isoformat()]).fetchall()
+                WHERE date >= ? AND date <= ?""" + city_clause +
+                " ORDER BY city,module,date,topic,group_name", params).fetchall()
+            cities = distinct_values(db, "city")
         grouped = defaultdict(lambda: defaultdict(list))
         for row in rows:
             grouped[row["city"]][row["module"]].append(dict(row))
@@ -672,7 +680,8 @@ def create_app(settings=None):
                                previous=previous if previous >= first else None,
                                following=start + timedelta(days=7) if start < current else None,
                                calendars=calendars, today=today, first_week=first,
-                               last_week_end=current + timedelta(days=6))
+                               last_week_end=current + timedelta(days=6), cities=cities,
+                               city_filter=city_filter, city_query={"city": city_filter} if city_filter else {})
 
     @app.get("/api/lessons")
     def api_lessons():

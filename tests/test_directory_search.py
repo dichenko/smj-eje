@@ -124,3 +124,27 @@ input.value = ''; input.fire('input');
 assert.equal(rows.every(row => !row.hidden), true);
 assert.equal(noResults.hidden, true); assert.equal(count.textContent, 4);
 """, script=SCRIPT.with_name("tutors-search.js"))
+
+
+def test_weekly_city_suggestions_work_without_teacher_field():
+    run_script("""
+const city = element(''), cityList = element(), hint = element(), form = element();
+cityList.options = ['Москва', 'Минск', 'Томск'].map(value => ({value}));
+city.form = form; form.reportValidity = () => !city.validity;
+run({'#city-search-options': cityList, 'input[name="city"]': city, '#city-search-hint': hint});
+const values = () => cityList.options.map(option => option.value);
+city.value = 'то'; city.fire('input');
+assert.deepEqual(values(), ['Томск']);
+assert.notEqual(city.validity, '');
+let prevented = false;
+form.events.submit({preventDefault() {prevented = true;}});
+assert.equal(prevented, true);
+city.value = 'томск'; city.fire('change');
+assert.equal(city.value, 'Томск'); assert.equal(city.validity, '');
+prevented = false; form.events.submit({preventDefault() {prevented = true;}});
+assert.equal(prevented, false);
+city.value = 'неизвестный'; city.fire('input');
+assert.deepEqual(values(), []); assert.equal(hint.textContent, 'Совпадений не найдено.');
+city.value = ''; city.fire('input');
+assert.deepEqual(values(), ['Москва', 'Минск', 'Томск']); assert.equal(city.validity, '');
+""")

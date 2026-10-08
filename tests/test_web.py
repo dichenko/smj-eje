@@ -258,3 +258,59 @@ def test_numbered_pagination_keeps_filters_and_shows_nearby_pages(settings, less
             assert params["teacher"] == ["Учитель 1"]
             assert params["start"] == ["2026-09-01"]
             assert params["per_page"] == ["10"]
+
+
+@pytest.mark.parametrize("path,extra", [
+    ("/weekly/2026-09-28", {}), ("/weekly", {"week": "2026-09-28"})])
+def test_weekly_city_filter_limits_rows_and_preserves_navigation(settings, lesson, path, extra):
+    run(settings, [lesson, replace(lesson, stable_id="2", city="Минск"),
+                   replace(lesson, stable_id="3", date="2026-10-05")])
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+    response = client.get(path, query_string={**extra, "city": "Москва"}, base_url="https://localhost")
+    assert response.status_code == 200
+    page = BeautifulSoup(response.data, "html.parser")
+    assert page.select_one(".total strong").get_text(strip=True) == "1"
+    assert [heading.get_text(strip=True) for heading in page.select(".city-card > h2")] == ["Москва"]
+    assert page.select_one('input[name="city"][type="search"]')["value"] == "Москва"
+    assert page.select_one('input[name="week"]')["value"] == "2026-09-28"
+    assert {option["value"] for option in page.select("#city-search-options option")} == {"Москва", "Минск"}
+    assert page.select_one('script[src="/static/directory-search.js"]')
+    links = page.select(".week-links a, .calendar a, .pagination a")
+    assert links
+    for link in links:
+        assert parse_qs(urlsplit(link["href"]).query)["city"] == ["Москва"]
+    # Clearing the same filter returns every city for the selected week.
+    unfiltered = BeautifulSoup(client.get(path, query_string=extra,
+                                           base_url="https://localhost").data, "html.parser")
+    assert unfiltered.select_one(".total strong").get_text(strip=True) == "2"
+
+
+def test_weekly_empty_city_keeps_city_choices_and_does_not_leak_other_cities(settings, lesson):
+    run(settings, [lesson, replace(lesson, stable_id="2", city="Томск", date="2026-10-05")])
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+    response = client.get("/weekly/2026-09-28?city=Томск", base_url="https://localhost")
+    page = BeautifulSoup(response.data, "html.parser")
+    assert page.select_one(".total strong").get_text(strip=True) == "0"
+    assert "Томск" in page.select_one(".empty h2").get_text()
+    assert not page.select(".city-card")
+    assert "Томск" in {option["value"] for option in page.select("#city-search-options option")}
+    invalid = client.get("/weekly/2026-09-28", query_string={"city": "x" * 201}, base_url="https://localhost")
+    assert invalid.status_code == 400
+    quoted = client.get("/weekly/2026-09-28", query_string={"city": "' OR 1=1 --"}, base_url="https://localhost")
+    assert BeautifulSoup(quoted.data, "html.parser").select_one(".total strong").get_text(strip=True) == "0"
+
+
+def test_weekly_city_form_keeps_a_valid_date_in_first_reporting_week(settings, lesson):
+    run(settings, [replace(lesson, date="2026-09-01")])
+    client = create_app(settings).test_client()
+    login(client, settings.password)
+    response = client.get("/weekly/2026-08-31?city=Москва", base_url="https://localhost")
+    assert response.status_code == 200
+    page = BeautifulSoup(response.data, "html.parser")
+    field = page.select_one('input[name="week"]')
+    assert field["value"] == "2026-09-01" and field["min"] <= field["value"] <= field["max"]
+    reapplied = client.get("/weekly", query_string={"week": field["value"], "city": "Москва"},
+                           base_url="https://localhost")
+    assert BeautifulSoup(reapplied.data, "html.parser").select_one(".total strong").get_text(strip=True) == "1"
