@@ -447,6 +447,50 @@ def test_video_telegram_icons_match_teacher_city_and_selected_coordinator(
                 assert icon["target"] == "_blank" and set(icon["rel"]) == {"noopener", "noreferrer"}
 
 
+@pytest.mark.parametrize("status, expected", [
+    ("", [2, 3, 1, 4]), ("pending", [2, 3]), ("sent", [1, 4]),
+    ("unknown", [2, 3, 1, 4]),
+])
+def test_video_submission_filter_and_default_order(settings, video_delete_client, status, expected):
+    with connection(settings.db_path) as db:
+        db.execute("UPDATE videos SET request_date='2026-10-10', sent_date='2026-10-11' WHERE id=1")
+        db.execute("UPDATE videos SET request_date='2026-10-09', video_url='https://example.test/video' WHERE id=2")
+        for city, teacher, date, sent in [
+            ("Москва", "Учитель 1", "2026-10-08", ""),
+            ("Москва", "Учитель 1", "2026-10-07", "2026-10-08"),
+            ("Минск", "Учитель 1", "2026-10-12", None),
+            ("Москва", "Другой учитель", "2026-10-12", "2026-10-13"),
+        ]:
+            db.execute("""INSERT INTO videos(city,teacher,request_date,sent_date,module,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?)""", [city, teacher, date, sent, "Kids", date, date])
+    response = video_delete_client.get("/videos", base_url="https://localhost", query_string={
+        "city": "Москва", "teacher": "Учитель 1", "status": status,
+    })
+    assert response.status_code == 200
+    page = BeautifulSoup(response.data, "html.parser")
+    links = page.select('.table-scroll a[href$="/edit"]')
+    assert [int(link["href"].split("/")[2]) for link in links] == expected
+    assert page.select_one('select[name="status"] option[selected]')["value"] == (
+        status if status in ("sent", "pending") else "")
+
+
+def test_video_submission_filter_survives_delete(settings, video_delete_client):
+    client = video_delete_client
+    page = BeautifulSoup(client.get("/videos?status=pending", base_url="https://localhost").data,
+                         "html.parser")
+    link = page.select_one('a[href^="/videos/1/delete"]')["href"]
+    confirmation = BeautifulSoup(client.get(link, base_url="https://localhost").data, "html.parser")
+    assert parse_qs(urlparse(confirmation.find("a", string="Отмена")["href"]).query) == {
+        "status": ["pending"]}
+    response = client.post(link, base_url="https://localhost", data={"csrf_token": csrf(client)})
+    assert response.status_code == 302
+    assert parse_qs(urlparse(response.location).query) == {"status": ["pending"]}
+    with connection(settings.db_path) as db:
+        db.execute("UPDATE videos SET sent_date='2026-10-10'")
+    page = client.get(response.location, base_url="https://localhost").get_data(as_text=True)
+    assert "По выбранным фильтрам видео не найдены." in page
+
+
 def test_video_telegram_icons_absent_for_missing_contacts(settings, video_delete_client):
     with connection(settings.db_path) as db:
         db.execute("UPDATE videos SET coordinator_id=NULL")

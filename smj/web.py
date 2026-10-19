@@ -484,6 +484,9 @@ def create_app(settings=None):
     def videos():
         city_filter = request.args.get("city", "").strip()
         teacher_filter = request.args.get("teacher", "").strip()
+        status_filter = request.args.get("status", "").strip()
+        if status_filter not in ("sent", "pending"):
+            status_filter = ""
         clauses, params = [], []
         if city_filter:
             clauses.append("v.city=?")
@@ -491,6 +494,10 @@ def create_app(settings=None):
         if teacher_filter:
             clauses.append("v.teacher=?")
             params.append(teacher_filter)
+        if status_filter == "sent":
+            clauses.append("COALESCE(v.sent_date, '') <> ''")
+        elif status_filter == "pending":
+            clauses.append("COALESCE(v.sent_date, '') = ''")
         where = " WHERE " + " AND ".join(clauses) if clauses else ""
         with connection(settings.db_path) as db:
             rows = [dict(row) for row in db.execute("""
@@ -499,11 +506,13 @@ def create_app(settings=None):
                     tc.telegram_username AS teacher_telegram_username FROM videos v
                 LEFT JOIN coordinators c ON c.id=v.coordinator_id
                 LEFT JOIN tutor_contacts tc ON tc.city=v.city AND tc.teacher=v.teacher
-            """ + where + " ORDER BY v.request_date DESC,v.city COLLATE NOCASE,v.teacher COLLATE NOCASE,v.id DESC",
+            """ + where + " ORDER BY (COALESCE(v.sent_date, '') <> ''),v.request_date DESC,"
+                "v.city COLLATE NOCASE,v.teacher COLLATE NOCASE,v.id DESC",
                 params)]
         teachers, cities, _, _ = video_form_choices()
         return render_template("videos.html", title="Видео", videos=rows, city_filter=city_filter,
-                               teacher_filter=teacher_filter, teachers=teachers, cities=cities)
+                               teacher_filter=teacher_filter, status_filter=status_filter,
+                               teachers=teachers, cities=cities)
 
     def render_video_form(values, error=None, video_id=None, existing_video=None):
         teacher_cities = video_teacher_cities()
@@ -593,6 +602,9 @@ def create_app(settings=None):
     @app.route("/videos/<int:video_id>/delete", methods=["GET", "POST"])
     def video_delete(video_id):
         selected = {key: request.args.get(key, "").strip()[:200] for key in ("city", "teacher")}
+        status = request.args.get("status", "").strip()
+        if status in ("sent", "pending"):
+            selected["status"] = status
         listing_url = url_for("videos", **{key: value for key, value in selected.items() if value})
         with connection(settings.db_path) as db:
             if request.method == "POST":
