@@ -5,7 +5,15 @@
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 <form method="post" class="form-grid">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <label>Преподаватель<input name="teacher" value="{{ teacher_input }}" list="video-teachers" maxlength="403" required autocomplete="off"><datalist id="video-teachers">{% for option in teacher_options %}<option value="{{ option.value }}" data-teacher="{{ option.teacher }}" data-city="{{ option.city }}" data-modules="{{ option.modules | tojson | forceescape }}">{% endfor %}</datalist></label>
+  <div class="video-teacher-field">
+    <label for="video-teacher">Преподаватель</label>
+    <div class="video-teacher-control">
+    <input id="video-teacher" name="teacher" value="{{ teacher_input }}" list="video-teachers" maxlength="403" required autocomplete="off" aria-describedby="video-teacher-hint">
+    <datalist id="video-teachers">{% for option in teacher_options %}<option value="{{ option.value }}" data-teacher="{{ option.teacher }}" data-city="{{ option.city }}" data-modules="{{ option.modules | tojson | forceescape }}">{% endfor %}</datalist>
+    <div id="video-teacher-suggestions" class="video-teacher-suggestions" role="listbox" aria-label="Преподаватели" hidden></div>
+    </div>
+    <span class="field-hint" id="video-teacher-hint" aria-live="polite">Начните вводить имя или фамилию.</span>
+  </div>
   <label>Город<input name="city" value="{{ video.city }}" maxlength="200" {% if automatic_city %}readonly{% endif %}><span class="field-hint" id="video-city-hint">Город подставляется при выборе преподавателя. Для нового преподавателя укажите город.</span></label>
   <label>Дата запроса<input type="date" name="request_date" value="{{ video.request_date }}" required></label>
   <label>Дата отправки<input type="date" name="sent_date" value="{{ video.sent_date or '' }}"></label>

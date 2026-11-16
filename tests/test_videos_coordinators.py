@@ -253,6 +253,11 @@ def test_video_form_derives_city_and_coordinator_from_teacher(settings, lesson):
     form = BeautifulSoup(response.data, "html.parser")
     assert form.select_one('input[name="city"]')["value"] == "Москва"
     assert form.select_one('input[name="city"]').has_attr("readonly")
+    teacher = form.select_one('#video-teacher')
+    assert teacher["name"] == "teacher" and teacher["list"] == "video-teachers"
+    assert form.select_one('label[for="video-teacher"]')
+    assert form.select_one('#video-teacher-suggestions[role="listbox"][hidden]')
+    assert form.select_one('#video-teacher-hint[aria-live="polite"]')
     assert form.select_one('select[name="coordinator_id"] option[selected]')["value"] == str(coordinator_id)
     assert form.select_one('script[src="/static/video-form.js"]')
     assert client.get("/static/video-form.js", base_url="https://localhost").status_code == 200
