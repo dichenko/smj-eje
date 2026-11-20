@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-heading"><h1>Удалить пользователя?</h1></div>
+<section class="card form-card">
+  <p>Пользователь <strong>{{ user.login }}</strong> потеряет доступ к отчетам. Удаление нельзя отменить.</p>
+  {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+  <form class="form-actions" method="post" action="{{ url_for('user_delete', user_id=user.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="danger">Удалить пользователя</button>
+    <a class="quiet" href="{{ url_for('settings') }}">Отмена</a>
+  </form>
+</section>
+{% endblock %}

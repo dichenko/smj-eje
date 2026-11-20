@@ -1,20 +1,22 @@
 import calendar
 from collections import defaultdict
 from datetime import date, timedelta
-import hashlib
 import hmac
 import re
 import secrets
-import time
 from urllib.parse import urlsplit
 
 from flask import Flask, abort, jsonify, redirect, render_template, request, send_file, session, url_for
+from flask_login import LoginManager, current_user, login_user, logout_user
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
 from .config import MODULES, Settings
 from .db import connection, distinct_values, initialize, query_lessons, sync_status, utc_now
 from .excel import video_report
+from .rate_limit import init_login_limiter, login_limiter_healthy, normalize_login, valid_login
+from .users import User, initialize_users, register_user_routes
 
 
 def normalize_telegram_username(value):
@@ -24,10 +26,11 @@ def normalize_telegram_username(value):
     return username
 
 
-def create_app(settings=None):
+def create_app(settings=None, *, config=None):
     settings = settings or Settings.from_env()
     settings.validate_web()
     initialize(settings.db_path)
+    initialize_users(settings.db_path, settings.password)
     app = Flask(__name__)
     app.config.update(
         SECRET_KEY=settings.secret_key,
@@ -43,8 +46,17 @@ def create_app(settings=None):
     if settings.production:
         # Exactly one trusted proxy: system Caddy; the upstream must remain loopback-only.
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
-    auth_version = hmac.new(settings.secret_key.encode(), settings.password.encode(),
-                            hashlib.sha256).hexdigest()
+    if config:
+        app.config.update(config)
+    login_manager = LoginManager(app)
+    dummy_hash = generate_password_hash(secrets.token_urlsafe(32))
+
+    @login_manager.user_loader
+    def load_user(session_id):
+        with connection(settings.db_path) as db:
+            row = db.execute("SELECT id,login,role,session_id FROM users WHERE session_id=?",
+                             (session_id,)).fetchone()
+        return User(row) if row is not None else None
 
     @app.template_filter("lesson_word")
     def lesson_word(number):
@@ -59,27 +71,32 @@ def create_app(settings=None):
         anchor = date(1970, 1, 5)  # Monday; keeps adjacent weeks opposite across year boundaries.
         return "a" if ((week_start - anchor).days // 7) % 2 == 0 else "b"
 
-    def authenticated():
-        value = session.get("auth_version", "")
-        return isinstance(value, str) and hmac.compare_digest(value, auth_version)
+    def is_admin():
+        return current_user.is_authenticated and current_user.role == "admin"
 
     def csrf_token():
         if "csrf" not in session:
             session["csrf"] = secrets.token_urlsafe(32)
         return session["csrf"]
 
+    admin_pages = {"coordinator_new", "coordinator_edit", "video_new", "video_edit", "video_delete"}
+
     @app.before_request
     def protect():
-        if request.method == "POST":
+        writes = request.method not in {"GET", "HEAD", "OPTIONS"}
+        endpoint = request.endpoint
+        if endpoint not in {"login", "static", "health"}:
+            if not current_user.is_authenticated:
+                if request.path.startswith("/api/"):
+                    return jsonify(error="Authentication required"), 401
+                return redirect(url_for("login"))
+            settings_page = request.path == "/settings" or request.path.startswith("/settings/")
+            if (settings_page or endpoint in admin_pages or (writes and endpoint != "logout")) and not is_admin():
+                abort(403)
+        if writes:
             supplied, expected = request.form.get("csrf_token", ""), session.get("csrf", "")
             if not expected or not hmac.compare_digest(supplied.encode(), expected.encode()):
                 abort(400, "Invalid form token. Reload the page and retry.")
-        if request.endpoint in {"login", "static", "health"}:
-            return None
-        if not authenticated():
-            if request.path.startswith("/api/"):
-                return jsonify(error="Authentication required"), 401
-            return redirect(url_for("login"))
         return None
 
     @app.after_request
@@ -98,54 +115,46 @@ def create_app(settings=None):
 
     @app.context_processor
     def context():
-        return {"csrf_token": csrf_token, "is_authenticated": authenticated(),
+        authenticated = current_user.is_authenticated
+        return {"csrf_token": csrf_token, "is_authenticated": authenticated, "is_admin": is_admin(),
                 "modules": MODULES, "data_start": settings.start_date,
-                "sync": sync_status(settings) if authenticated() else None}
+                "sync": sync_status(settings) if authenticated else None}
 
     @app.route("/login", methods=["GET", "POST"])
     def login():
-        if authenticated():
+        if current_user.is_authenticated:
             return redirect(url_for("weekly"))
-        error, status = None, 200
         if request.method == "POST":
-            now = time.time()
-            ip = request.remote_addr or "unknown"
-            # SQLite BEGIN IMMEDIATE makes the shared rate limit atomic across all workers.
-            with connection(settings.db_path) as db:
-                db.execute("BEGIN IMMEDIATE")
-                db.execute("DELETE FROM login_attempts WHERE attempted_at < ?", [now - 900])
-                total = db.execute("SELECT COUNT(*) FROM login_attempts").fetchone()[0]
-                count = db.execute("SELECT COUNT(*) FROM login_attempts WHERE ip=?", [ip]).fetchone()[0]
-                if count >= 5 or total >= 50:
-                    error, status = "Слишком много попыток. Повторите через 15 минут.", 429
-                elif hmac.compare_digest(
-                    hashlib.sha256(request.form.get("password", "").encode()).digest(),
-                    hashlib.sha256(settings.password.encode()).digest(),
-                ):
-                    db.execute("DELETE FROM login_attempts WHERE ip=?", [ip])
-                    session.clear()
-                    session.permanent = True
-                    session["auth_version"] = auth_version
-                    session["csrf"] = secrets.token_urlsafe(32)
-                    return redirect(url_for("weekly"))
-                else:
-                    db.execute("INSERT INTO login_attempts VALUES (?,?)", [ip, now])
-                    error, status = "Неверный пароль.", 401
-        response = app.make_response((render_template("login.html", error=error), status))
-        if status == 429:
-            response.headers["Retry-After"] = "900"
-        return response
+            login_name = normalize_login(request.form.get("login", ""))
+            password = request.form.get("password", "")
+            row = None
+            if valid_login(login_name):
+                with connection(settings.db_path) as db:
+                    row = db.execute("SELECT * FROM users WHERE login=?", (login_name,)).fetchone()
+            if check_password_hash(row["password_hash"] if row is not None else dummy_hash,
+                                   password) and row is not None:
+                session.clear()
+                session.permanent = True
+                login_user(User(row))
+                csrf_token()
+                return redirect(url_for("weekly"))
+            return render_template("login.html", error="Неверный логин или пароль.",
+                                   login_value=login_name[:32]), 401
+        return render_template("login.html")
 
     @app.post("/logout")
     def logout():
+        logout_user()
         session.clear()
         return redirect(url_for("login"))
 
     @app.get("/healthz")
     def health():
         # Caddyfile blocks this route publicly. Direct loopback checks use no forwarded headers.
-        if request.remote_addr not in {"127.0.0.1", "::1"} and not authenticated():
+        if request.remote_addr not in {"127.0.0.1", "::1"} and not current_user.is_authenticated:
             abort(404)
+        if not login_limiter_healthy(app):
+            abort(503)
         with connection(settings.db_path) as db:
             db.execute("SELECT 1 FROM lessons LIMIT 1")
         return jsonify(status="ok")
@@ -708,6 +717,7 @@ def create_app(settings=None):
         return jsonify(sync_status(settings))
 
     @app.errorhandler(400)
+    @app.errorhandler(403)
     @app.errorhandler(404)
     @app.errorhandler(413)
     @app.errorhandler(500)
@@ -716,4 +726,6 @@ def create_app(settings=None):
             return jsonify(error="Request failed", status=error.code), error.code
         return render_template("error.html", title="Ошибка", code=error.code), error.code
 
+    register_user_routes(app, settings.db_path)
+    init_login_limiter(app)
     return app

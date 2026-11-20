@@ -76,8 +76,8 @@ class Settings:
         return settings
 
     def validate_web(self):
-        if len(self.password) < 32 or len(self.secret_key) < 32:
-            raise ValueError("APP_PASSWORD and FLASK_SECRET_KEY must each have at least 32 characters")
+        if len(self.secret_key) < 32:
+            raise ValueError("FLASK_SECRET_KEY must have at least 32 characters")
 
     def validate_source(self):
         if not self.source_username or not self.source_password:

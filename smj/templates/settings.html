@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block content %}
+{% set creation = values | default({}, true) %}
+<div class="page-heading"><h1>Настройки</h1></div>
+{% if generated_password %}
+<section class="card form-card" aria-labelledby="generated-password-heading">
+  <h2 id="generated-password-heading">Новый пароль{% if generated_login %} для {{ generated_login }}{% endif %}</h2>
+  <p><output id="generated-password" class="account-secret">{{ generated_password }}</output></p>
+  <p class="muted">Пароль показывается только сейчас.</p>
+</section>
+{% endif %}
+<section aria-labelledby="users-heading">
+  <h2 id="users-heading">Пользователи</h2>
+  <div class="card table-scroll">
+    <table aria-labelledby="users-heading">
+      <thead><tr><th scope="col">Логин</th><th scope="col">Роль</th><th scope="col">Действия</th></tr></thead>
+      <tbody>
+      {% for user in users %}
+        <tr>
+          <th scope="row">{{ user.login }}{% if user.id == current_user.id %} <span class="muted">(вы)</span>{% endif %}</th>
+          <td>{{ 'Админ' if user.role == 'admin' else 'Гость' }}</td>
+          <td><div class="user-actions">
+            <a class="quiet" href="{{ url_for('user_edit', user_id=user.id) }}" aria-label="Изменить пользователя {{ user.login }}">Изменить</a>
+            <a class="quiet danger" href="{{ url_for('user_delete', user_id=user.id) }}" aria-label="Удалить пользователя {{ user.login }}">Удалить</a>
+          </div></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="3" class="empty">Пользователей пока нет.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+<section class="card form-card" aria-labelledby="create-user-heading">
+  <h2 id="create-user-heading">Добавить пользователя</h2>
+  {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+  <form class="form-grid" method="post" action="{{ url_for('user_new') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Логин<input name="login" value="{{ creation.get('login', '') }}" minlength="3" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9_.\-]{2,31}" aria-describedby="login-format" autocomplete="off" autocapitalize="none" spellcheck="false" required><span id="login-format" class="field-hint">3–32 символа: латинские буквы, цифры, точка, дефис и подчёркивание. Первый символ — буква или цифра.</span></label>
+    <label>Роль<select name="role">
+      <option value="guest">Гость</option>
+      <option value="admin"{% if creation.get('role') == 'admin' %} selected{% endif %}>Админ</option>
+    </select></label>
+    <div class="form-actions"><button type="submit">Создать</button></div>
+  </form>
+</section>
+{% endblock %}

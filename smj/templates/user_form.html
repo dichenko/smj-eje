@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-heading"><h1>Редактировать пользователя</h1></div>
+<section class="card form-card">
+  {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+  <form class="form-grid" method="post" action="{{ url_for('user_edit', user_id=user.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Логин<input name="login" value="{{ values.login }}" minlength="3" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9_.\-]{2,31}" aria-describedby="login-format" autocomplete="off" autocapitalize="none" spellcheck="false" required><span id="login-format" class="field-hint">3–32 символа: латинские буквы, цифры, точка, дефис и подчёркивание. Первый символ — буква или цифра.</span></label>
+    <label>Роль<select name="role">
+      <option value="guest"{% if values.role == 'guest' %} selected{% endif %}>Гость</option>
+      <option value="admin"{% if values.role == 'admin' %} selected{% endif %}>Админ</option>
+    </select></label>
+    <div class="form-actions"><button type="submit">Сохранить</button><a class="quiet" href="{{ url_for('settings') }}">Отмена</a></div>
+  </form>
+</section>
+<section class="card form-card" aria-labelledby="reset-password-heading">
+  <h2 id="reset-password-heading">Пароль</h2>
+  <form method="post" action="{{ url_for('user_reset_password', user_id=user.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="quiet">Сбросить пароль</button>
+  </form>
+</section>
+{% endblock %}

@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% block content %}
+{% if is_admin %}
 <div class="page-heading"><div><p class="eyebrow">СПРАВОЧНИК</p><h1>{{ title }}</h1></div></div>
 <section class="card form-card">
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
@@ -15,4 +16,5 @@
   <div class="form-actions"><button type="submit">Сохранить</button><a class="quiet" href="{{ url_for('coordinators') }}">Отмена</a></div>
 </form>
 </section>
+{% endif %}
 {% endblock %}

@@ -22,6 +22,28 @@ if [[ $(git rev-parse origin/main) != "$TARGET" ]]; then
 fi
 PREVIOUS=$(git rev-parse HEAD)
 git merge-base --is-ancestor "$PREVIOUS" "$TARGET"
+
+# Prepare Redis before stopping anything. Never replace an existing service or configuration.
+redis_ping() { [[ $(timeout 4 redis-cli -h 127.0.0.1 -p 6379 -n 4 --raw PING) == PONG ]]; }
+redis_listeners() { ss -H -ltn 'sport = :6379'; }
+if ! command -v redis-cli >/dev/null || ! redis_ping; then
+    LISTENERS=$(redis_listeners)
+    if [[ -z $(dpkg-query -W -f='${db:Status-Abbrev}' redis-server 2>/dev/null || :) ]] \
+        && ! systemctl cat redis-server.service >/dev/null 2>&1 \
+        && ! systemctl cat redis.service >/dev/null 2>&1 \
+        && [[ -z $LISTENERS ]]; then
+        apt-get -o APT::Update::Error-Mode=any update
+        DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends install redis-server
+        systemctl enable --now redis-server.service
+    fi
+fi
+redis_ping || { echo 'Loopback Redis is unavailable; leaving current release running.' >&2; exit 1; }
+LISTENERS=$(redis_listeners)
+if [[ -z $LISTENERS ]] || ! awk '$4 !~ /^(127[.]0[.]0[.]1|\[::1\]):6379$/ {exit 1}' <<< "$LISTENERS"; then
+    echo 'Redis must not listen outside loopback; leaving current release running.' >&2
+    exit 1
+fi
+
 SYNC_TIMER=0
 BACKUP_TIMER=0
 systemctl is-active --quiet smj-sync.timer && SYNC_TIMER=1

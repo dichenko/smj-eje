@@ -5,8 +5,8 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 from bs4 import BeautifulSoup
 
-from smj.web import create_app
 from smj.db import connection
+from conftest import create_app
 from test_sync import run
 
 
@@ -15,9 +15,9 @@ def token(client):
     return re.search(r'name="csrf_token" value="([^"]+)"', html)[1]
 
 
-def login(client, password):
+def login(client, password, login_name="admin"):
     return client.post("/login", base_url="https://localhost",
-                       data={"csrf_token": token(client), "password": password})
+                       data={"csrf_token": token(client), "login": login_name, "password": password})
 
 
 @pytest.fixture
@@ -56,24 +56,26 @@ def test_login_logout_csrf_and_cookie_security(app, settings):
     assert client.get("/api/lessons", base_url="https://localhost").status_code == 401
 
 
-def test_shared_rate_limit_survives_restart(settings):
-    client = create_app(settings).test_client()
-    for _ in range(5):
-        assert login(client, "bad").status_code == 401
-    restarted = create_app(settings).test_client()
-    response = login(restarted, settings.password)
-    assert response.status_code == 429
-    assert response.headers["Retry-After"] == "900"
-
-
-def test_password_rotation_invalidates_existing_sessions(settings):
+def test_memory_rate_limit_is_shared_within_app_and_resets_on_restart(settings):
     app = create_app(settings)
     client = app.test_client()
-    login(client, settings.password)
-    cookie = client.get_cookie("smj_session")
-    changed = create_app(replace(settings, password="C" * 48)).test_client()
-    changed.set_cookie("smj_session", cookie.value)
-    assert changed.get("/api/lessons", base_url="https://localhost").status_code == 401
+    for attempt in range(10):
+        assert login(client, "bad", f"unknown_{attempt}").status_code == 401
+    response = login(app.test_client(), settings.password)
+    assert response.status_code == 429
+    assert 0 < int(response.headers["Retry-After"]) <= 60
+    assert login(create_app(settings).test_client(), settings.password).status_code == 302
+
+
+def test_login_requires_username_and_uses_same_message_for_unknown_user(app, settings):
+    client = app.test_client()
+    assert login(client, settings.password, "").status_code != 302
+    unknown = login(client, settings.password, "unknown_user")
+    bad_password = login(client, "wrong", "admin")
+    assert unknown.status_code == bad_password.status_code == 401
+    unknown_error = BeautifulSoup(unknown.data, "html.parser").select_one('[role="alert"]')
+    bad_error = BeautifulSoup(bad_password.data, "html.parser").select_one('[role="alert"]')
+    assert unknown_error.get_text(strip=True) == bad_error.get_text(strip=True)
 
 
 def test_unsafe_source_content_escaped_in_reports(settings, lesson):

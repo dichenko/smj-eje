@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% block content %}
+{% if is_admin %}
 <div class="page-heading"><div><p class="eyebrow">НАБЛЮДЕНИЯ ЗАНЯТИЙ</p><h1>{{ title }}</h1></div></div>
 <section class="card form-card">
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
@@ -26,4 +27,5 @@
 </form>
 </section>
 <script src="{{ url_for('static', filename='video-form.js') }}" defer></script>
+{% endif %}
 {% endblock %}

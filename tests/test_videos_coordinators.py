@@ -12,7 +12,7 @@ import pytest
 from bs4 import BeautifulSoup
 
 from smj.db import connection, initialize, upsert_coordinators
-from smj.web import create_app
+from conftest import create_app
 from test_sync import run
 
 
@@ -27,7 +27,7 @@ def csrf(client):
 
 def login(client, password):
     return client.post("/login", base_url="https://localhost",
-                       data={"csrf_token": csrf(client), "password": password})
+                       data={"csrf_token": csrf(client), "login": "admin", "password": password})
 
 
 def add_coordinator(settings, **overrides):

@@ -5,6 +5,16 @@ import pytest
 from smj.config import Settings
 from smj.db import connection
 from smj.source import Lesson
+from smj.web import create_app as create_web_app
+
+
+def create_app(settings):
+    return create_web_app(settings, config={"TESTING": True})
+
+
+@pytest.fixture(autouse=True)
+def login_limiter_storage(monkeypatch):
+    monkeypatch.setenv("LOGIN_RATE_LIMIT_STORAGE_URI", "memory://")
 
 
 @pytest.fixture

@@ -15,7 +15,7 @@ def test_real_gunicorn_startup_and_http(settings):
         port = listener.getsockname()[1]
     env = {**os.environ, "ENV_FILE": str(settings.db_path.parent / "absent.env"),
            "DB_PATH": str(settings.db_path), "APP_PASSWORD": settings.password,
-           "FLASK_SECRET_KEY": settings.secret_key, "APP_ENV": "production",
+           "FLASK_SECRET_KEY": settings.secret_key, "APP_ENV": "development",
            "SMARTJ_BASE_URL": "https://example.test"}
     process = subprocess.Popen(
         ["gunicorn", "--bind", f"127.0.0.1:{port}", "--workers", "1", "--threads", "2", "wsgi:app"],
