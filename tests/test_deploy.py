@@ -47,6 +47,8 @@ class DeployTests(unittest.TestCase):
         content = script.read_text().replace(
             "[[ $EUID == 0 ]] || { echo 'Deployment requires root.' >&2; exit 1; }", "true")
         self.script.write_text(content.replace("/etc/systemd/system", str(self.units)))
+        self.mock("redis-cli", '[[ ${FAIL_REDIS:-0} != 1 ]] && printf "PONG\\n"\n')
+        self.mock("ss", 'printf "%s\\n" "LISTEN 0 511 127.0.0.1:6379 0.0.0.0:*"\n')
         self.mock("systemctl", 'printf "%s\\n" "systemctl $*" >> "$TEST_LOG"\n')
         self.mock("curl", '''printf '%s\n' 'health check' >> "$TEST_LOG"
 if [[ ${FAIL_HEALTH:-0} == 1 && ! -f "$TEST_LOG.health" ]]; then
@@ -114,6 +116,13 @@ chmod +x "$3/bin/python"
     def test_health_failure_restores_previous_environment(self):
         self.assert_rollback(self.deploy(FAIL_HEALTH="1"))
         self.assertEqual((self.app / ".venv").resolve(), self.state / "bootstrap-venv")
+
+    def test_unavailable_redis_leaves_current_release_running(self):
+        result = self.deploy(FAIL_REDIS="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Loopback Redis is unavailable", result.stderr)
+        self.assertEqual(self.git(self.app, "rev-parse", "HEAD").strip(), self.previous)
+        self.assertNotIn("systemctl stop", self.log.read_text() if self.log.exists() else "")
 
     def test_superseded_commit_never_stops_services(self):
         (self.source / "requirements.txt").write_text("newer\n")
