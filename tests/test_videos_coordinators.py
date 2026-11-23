@@ -479,6 +479,26 @@ def test_video_submission_filter_and_default_order(settings, video_delete_client
         status if status in ("sent", "pending") else "")
 
 
+@pytest.mark.parametrize("video_url, positive_notes, growth_notes, highlighted", [
+    ("https://example.test/video", "Хороший темп", "Добавить вопросы", True),
+    ("", "Хороший темп", "Добавить вопросы", False),
+    ("https://example.test/video", "", "Добавить вопросы", False),
+    ("https://example.test/video", "Хороший темп", " \t\n", False),
+])
+def test_video_highlight_requires_link_and_both_notes(
+        settings, video_delete_client, video_url, positive_notes, growth_notes, highlighted):
+    with connection(settings.db_path) as db:
+        db.execute("""UPDATE videos SET video_url=?, positive_notes=?, growth_notes=?
+            WHERE id=1""", [video_url, positive_notes, growth_notes])
+    response = video_delete_client.get("/videos", base_url="https://localhost")
+    assert response.status_code == 200
+    page = BeautifulSoup(response.data, "html.parser")
+    rows = page.select("tbody tr.video-completed")
+    assert len(rows) == int(highlighted)
+    if highlighted:
+        assert rows[0].select_one('a[href="/videos/1/edit"]') is not None
+
+
 def test_video_submission_filter_survives_delete(settings, video_delete_client):
     client = video_delete_client
     page = BeautifulSoup(client.get("/videos?status=pending", base_url="https://localhost").data,

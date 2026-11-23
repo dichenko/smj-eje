@@ -13,7 +13,8 @@
 <section class="card table-scroll">
 <table>
   <thead><tr><th>Дата запроса</th><th>Дата отправки</th><th>Преподаватель</th><th>Город</th><th>Модуль</th><th>Координатор</th><th>Видео</th><th>Отчет</th>{% if is_admin %}<th>Действия</th>{% endif %}</tr></thead>
-  <tbody>{% for video in videos %}<tr>
+  <tbody>{% for video in videos %}
+  <tr{% if video.video_url|trim and video.positive_notes|trim and video.growth_notes|trim %} class="video-completed"{% endif %}>
     <td class="nowrap">{{ video.request_date[8:10] }}.{{ video.request_date[5:7] }}.{{ video.request_date[:4] }}</td>
     <td class="nowrap">{% if video.sent_date %}{{ video.sent_date[8:10] }}.{{ video.sent_date[5:7] }}.{{ video.sent_date[:4] }}{% else %}<span class="muted">Не сдано</span>{% endif %}</td>
     <td><strong>{{ video.teacher }}</strong>{{ telegram_icon(video.teacher_telegram_username) }}</td><td>{{ video.city }}</td><td><span class="badge {{ video.module.lower() }}">{{ video.module }}</span></td>

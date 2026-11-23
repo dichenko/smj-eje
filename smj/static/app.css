@@ -14,6 +14,8 @@ label{display:block;font-size:13px;font-weight:600;color:#526178}input,select{di
 .page-numbers{display:flex;align-items:center;gap:5px}.page-number{display:inline-flex;min-width:36px;height:36px;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:7px;background:white;color:var(--primary);font-weight:600}.page-number.current{border-color:var(--primary);background:var(--primary);color:white}.pagination-ellipsis{padding:0 3px}.pagination-status{white-space:nowrap}
 .small-link{font-size:12px}
 .danger{background:#fff1f0;color:#ad3232;border-color:#efc4c4}.video-actions{display:flex;flex-wrap:wrap;gap:8px}.form-actions{flex-wrap:wrap}
+tbody tr.video-completed{background:#edf8ef}
+tbody tr.video-completed:hover{background:#e2f3e6}
 .tutor-telegram-icon{display:inline-block;width:18px;height:18px;vertical-align:-3px}.tutor-telegram-icon svg{display:block;width:100%;height:100%}.directory-search{display:block;max-width:600px}
 .section-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:18px}.section-heading h2{margin:0}
 .tutor-telegram-icon:hover{filter:brightness(.9)}.tutor-telegram-icon:focus-visible{outline:2px solid var(--primary);outline-offset:3px;border-radius:50%}
